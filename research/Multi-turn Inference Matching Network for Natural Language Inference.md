@@ -12,7 +12,7 @@
 
 ## Model architecture:
 
-![alt text](mimn-architecture.png "Title")
+![alt text](images/mimn-architecture.png "Title")
 
 ## Training (split is very odd? >96% training for SNLI):
 
