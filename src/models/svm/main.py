@@ -70,10 +70,11 @@ def objective(trial):
     
     # Train model
     logging.info(f"Training SVM with hyperparameters: C={C}, kernel={kernel}, gamma={gamma}")
-    pipeline.fit(train_df['text'], train_labels)
+    print(train_df['text'][:10].values)
+    pipeline.fit(train_df['text'].values, train_labels)  # Convert to numpy array
     
     # Evaluate on dev set
-    dev_preds = pipeline.predict(dev_df['text'])
+    dev_preds = pipeline.predict(dev_df['text'].values)  # Convert to numpy array
     metrics = calculate_all_metrics(dev_labels, dev_preds)
     
     svm_dir = config.SAVE_DIR / "svm"
