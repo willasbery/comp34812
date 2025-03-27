@@ -6,7 +6,7 @@ class BaseConfig:
     DEV_FILE = DATA_DIR / "dev.csv"
     AUG_TRAIN_FILE = DATA_DIR / "train_augmented.csv"
     SAVE_DIR = DATA_DIR / "results"
-
+    CACHE_DIR = Path(__file__).parent.parent / "cache"
     
 def get_config() -> BaseConfig:
     return BaseConfig()

@@ -1,33 +1,60 @@
+import argparse
 import logging
-import pandas as pd
-import numpy as np
 import nltk
+import numpy as np
+import pandas as pd
+import pickle
 import random
-import string
 import re
+import string
 from gensim.downloader import load as glove_embeddings_loader
 from nltk.corpus import stopwords as nltk_stopwords
 from pathlib import Path
 from tqdm import tqdm
-import argparse
 
+import warnings
+warnings.filterwarnings('ignore')
 nltk.download('stopwords')
 nltk.download('averaged_perceptron_tagger_eng')
+
+# Import config
+from src.config import config
 
 # Set up logging
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO)
 
-# Path configuration
-DATA_DIR = Path('./data')
-TRAIN_PATH = DATA_DIR / 'train.csv'
-DEV_PATH = DATA_DIR / 'dev.csv'
-AUGMENTED_DATA_PATH = DATA_DIR / 'train_augmented.csv'
+# Use paths from config
+DATA_DIR = config.DATA_DIR
+TRAIN_PATH = config.TRAIN_FILE
+DEV_PATH = config.DEV_FILE
+AUGMENTED_DATA_PATH = config.AUG_TRAIN_FILE
+CACHE_DIR = config.DATA_DIR.parent / "cache"
+EMBEDDINGS_CACHE_PATH = config.CACHE_DIR / 'glove_embeddings.pkl'
 
 stopwords = set(nltk_stopwords.words('english'))
-glove_embeddings = glove_embeddings_loader('glove-wiki-gigaword-300')
 
+def load_cached_embeddings():
+    """Load GloVe embeddings from cache if available, otherwise download and cache them."""
+    
+    # Create cache directory if it doesn't exist
+    CACHE_DIR.mkdir(exist_ok=True, parents=True)
+    
+    if EMBEDDINGS_CACHE_PATH.exists():
+        print(f"Loading GloVe embeddings from cache: {EMBEDDINGS_CACHE_PATH}")
+        with open(EMBEDDINGS_CACHE_PATH, 'rb') as f:
+            glove_embeddings = pickle.load(f)
+    else:
+        print(f"Downloading GloVe embeddings (this might take a while)...")
+        glove_embeddings = glove_embeddings_loader('glove-wiki-gigaword-300')
+        
+        # Cache the embeddings for future use
+        print(f"Caching GloVe embeddings to: {EMBEDDINGS_CACHE_PATH}")
+        with open(EMBEDDINGS_CACHE_PATH, 'wb') as f:
+            pickle.dump(glove_embeddings, f)
+    
+    return glove_embeddings
 
 def get_synonyms(word: str, noise_level: float=0.005, topn: int=10, similarity_threshold: float=0.7):
     global glove_embeddings
@@ -522,47 +549,7 @@ def find_contextual_replacements(word_to_replace: str,
     return False, ""
 
 
-if __name__ == "__main__":
-    # Set up command line arguments
-    parser = argparse.ArgumentParser(description='Data augmentation with semantic preservation')
-    parser.add_argument('--output_file', type=str, default='data/train_augmented_semantically_preserved.csv',
-                      help='Output file path for augmented data')
-    parser.add_argument('--min_word_similarity', type=float, default=0.75,
-                      help='Minimum similarity threshold for synonym replacement')
-    parser.add_argument('--min_sentence_similarity', type=float, default=0.85,
-                      help='Minimum similarity threshold between original and augmented sentences')
-    parser.add_argument('--replacement_fraction', type=float, default=0.25,
-                      help='Fraction of eligible words to replace (0.0-1.0)')
-    parser.add_argument('--use_diverse_replacements', action='store_true',
-                      help='Use diverse contextual replacements instead of standard synonyms')
-    parser.add_argument('--add_original', action='store_true', default=True,
-                      help='Include original evidence in output')
-    parser.add_argument('--batch_size', type=int, default=1000,
-                      help='Batch size for saving to CSV')
-    
-    args = parser.parse_args()
-    
-    print(f"Loading data files...")
-    train_df = pd.read_csv(TRAIN_PATH)
-    dev_df = pd.read_csv(DEV_PATH)
-
-    print(f"Processing POS tags...")
-    train_df['POS'] = train_df['Evidence'].apply(lambda x: nltk.pos_tag(nltk.word_tokenize(x)))
-    original_evidences_pos = train_df['POS'].tolist()
-    original_evidences = train_df['Evidence'].tolist()
-
-    preprocessed_evidences = train_df['Evidence'].apply(remove_stopwords).tolist()
-    corresponding_claim = train_df['Claim'].apply(remove_stopwords).tolist()
-
-    print(f"Starting data augmentation with the following parameters:")
-    print(f" - Minimum word similarity: {args.min_word_similarity}")
-    print(f" - Minimum sentence similarity: {args.min_sentence_similarity}")
-    print(f" - Replacement fraction: {args.replacement_fraction}")
-    print(f" - Using diverse contextual replacements: {args.use_diverse_replacements}")
-    print(f" - Output file: {args.output_file}")
-    
-    # Modify augment_data function to use diverse replacements if requested
-    def augment_with_chosen_method(train_df, preprocessed_evidences, corresponding_claim, 
+def augment_with_chosen_method(train_df, preprocessed_evidences, corresponding_claim, 
                                   original_evidences, original_pos_tags, file_name,
                                   add_original_evidence, replacement_fraction, 
                                   min_replacement_quality, min_sentence_similarity, batch_size):
@@ -683,6 +670,50 @@ if __name__ == "__main__":
         print(f"Success rate: {successful_augmentations/attempted_augmentations*100:.2f}%")
         
         return successful_augmentations
+
+
+def main():
+    # Set up command line arguments
+    parser = argparse.ArgumentParser(description='Data augmentation with semantic preservation')
+    parser.add_argument('--output_file', type=str, 
+                        default=str(config.DATA_DIR / 'train_augmented_semantically_preserved.csv'),
+                        help='Output file path for augmented data')
+    parser.add_argument('--min_word_similarity', type=float, default=0.75,
+                      help='Minimum similarity threshold for synonym replacement')
+    parser.add_argument('--min_sentence_similarity', type=float, default=0.85,
+                      help='Minimum similarity threshold between original and augmented sentences')
+    parser.add_argument('--replacement_fraction', type=float, default=0.25,
+                      help='Fraction of eligible words to replace (0.0-1.0)')
+    parser.add_argument('--use_diverse_replacements', action='store_true',
+                      help='Use diverse contextual replacements instead of standard synonyms')
+    parser.add_argument('--add_original', action='store_true', default=True,
+                      help='Include original evidence in output')
+    parser.add_argument('--batch_size', type=int, default=1000,
+                      help='Batch size for saving to CSV')
+    
+    args = parser.parse_args()
+    
+    # Load embeddings
+    glove_embeddings = load_cached_embeddings()
+    
+    print(f"Loading data files...")
+    train_df = pd.read_csv(TRAIN_PATH)
+    dev_df = pd.read_csv(DEV_PATH)
+
+    print(f"Processing POS tags...")
+    train_df['POS'] = train_df['Evidence'].apply(lambda x: nltk.pos_tag(nltk.word_tokenize(x)))
+    original_evidences_pos = train_df['POS'].tolist()
+    original_evidences = train_df['Evidence'].tolist()
+
+    preprocessed_evidences = train_df['Evidence'].apply(remove_stopwords).tolist()
+    corresponding_claim = train_df['Claim'].apply(remove_stopwords).tolist()
+
+    print(f"Starting data augmentation with the following parameters:")
+    print(f" - Minimum word similarity: {args.min_word_similarity}")
+    print(f" - Minimum sentence similarity: {args.min_sentence_similarity}")
+    print(f" - Replacement fraction: {args.replacement_fraction}")
+    print(f" - Using diverse contextual replacements: {args.use_diverse_replacements}")
+    print(f" - Output file: {args.output_file}")
     
     # Run the augmentation with chosen parameters
     num_augmented = augment_with_chosen_method(
