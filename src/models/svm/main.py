@@ -33,13 +33,11 @@ train_aug_df = pd.read_csv(config.AUG_TRAIN_FILE)
 
 train_df, dev_df, train_labels, dev_labels = prepare_data(train_df, train_aug_df, dev_df)
 
-trial_number = 0
-
 def objective(trial):
     """Optuna objective function for hyperparameter optimization."""
     # Load data
-    global trial_number, train_df, dev_df, train_labels, dev_labels
-    trial_number += 1
+    global train_df, dev_df, train_labels, dev_labels
+    trial_number = trial.number
     
     # Suggest hyperparameters
     C = trial.suggest_float("C", 0.01, 100.0, log=True)
