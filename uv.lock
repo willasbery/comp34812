@@ -376,11 +376,14 @@ dependencies = [
     { name = "googletrans" },
     { name = "ipykernel" },
     { name = "nltk" },
+    { name = "numpy" },
     { name = "optuna" },
     { name = "pandas" },
+    { name = "scipy" },
     { name = "sentence-transformers" },
     { name = "torch" },
     { name = "torchvision" },
+    { name = "tqdm" },
     { name = "xgboost" },
 ]
 
@@ -392,11 +395,14 @@ requires-dist = [
     { name = "googletrans", specifier = ">=4.0.2" },
     { name = "ipykernel", specifier = ">=6.29.5" },
     { name = "nltk", specifier = ">=3.9.1" },
+    { name = "numpy", specifier = "==1.26.4" },
     { name = "optuna", specifier = ">=4.2.1" },
     { name = "pandas", specifier = ">=2.2.3" },
+    { name = "scipy", specifier = ">=1.7.0" },
     { name = "sentence-transformers", specifier = ">=3.4.1" },
     { name = "torch", specifier = ">=2.6.0" },
     { name = "torchvision", specifier = ">=0.21.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
     { name = "xgboost", specifier = ">=3.0.0" },
 ]
 
