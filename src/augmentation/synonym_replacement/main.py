@@ -25,13 +25,9 @@ logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO)
 
-# Use paths from config
-DATA_DIR = config.DATA_DIR
-TRAIN_PATH = config.TRAIN_FILE
-DEV_PATH = config.DEV_FILE
-AUGMENTED_DATA_PATH = config.AUG_TRAIN_FILE
+# Define cache directory and path
 CACHE_DIR = config.DATA_DIR.parent / "cache"
-EMBEDDINGS_CACHE_PATH = config.CACHE_DIR / 'glove_embeddings.pkl'
+EMBEDDINGS_CACHE_PATH = CACHE_DIR / 'glove_embeddings.pkl'
 
 stopwords = set(nltk_stopwords.words('english'))
 
@@ -42,15 +38,15 @@ def load_cached_embeddings():
     CACHE_DIR.mkdir(exist_ok=True, parents=True)
     
     if EMBEDDINGS_CACHE_PATH.exists():
-        print(f"Loading GloVe embeddings from cache: {EMBEDDINGS_CACHE_PATH}")
+        logging.info(f"Loading GloVe embeddings from cache: {EMBEDDINGS_CACHE_PATH}")
         with open(EMBEDDINGS_CACHE_PATH, 'rb') as f:
             glove_embeddings = pickle.load(f)
     else:
-        print(f"Downloading GloVe embeddings (this might take a while)...")
+        logging.info(f"Downloading GloVe embeddings (this might take a while)...")
         glove_embeddings = glove_embeddings_loader('glove-wiki-gigaword-300')
         
         # Cache the embeddings for future use
-        print(f"Caching GloVe embeddings to: {EMBEDDINGS_CACHE_PATH}")
+        logging.info(f"Caching GloVe embeddings to: {EMBEDDINGS_CACHE_PATH}")
         with open(EMBEDDINGS_CACHE_PATH, 'wb') as f:
             pickle.dump(glove_embeddings, f)
     
@@ -244,7 +240,8 @@ def find_valid_replacements(word_to_replace: str,
             
     return False, ""
 
-def calculate_sentence_similarity(original_sentence: str, augmented_sentence: str) -> float:
+def calculate_sentence_similarity(original_sentence: str, 
+                                  augmented_sentence: str) -> float:
     """
     Calculate semantic similarity between original and augmented sentences.
     
@@ -408,12 +405,15 @@ def update_augment_data(train_df: pd.DataFrame,
         
         synyonm_replaced_df.to_csv(file_name, index=False, mode=mode, header=header)
     
-    # Print statistics
-    print(f"Augmentation completed: {successful_augmentations} sentences successfully augmented out of {attempted_augmentations} attempts.")
-    print(f"Success rate: {successful_augmentations/attempted_augmentations*100:.2f}%")
+    # logging.info statistics
+    logging.info(f"Augmentation completed: {successful_augmentations} sentences successfully augmented out of {attempted_augmentations} attempts.")
+    logging.info(f"Success rate: {successful_augmentations/attempted_augmentations*100:.2f}%")
 
 
-def get_diverse_replacements(word: str, context: list, topn: int=5, diversity_weight: float=0.3):
+def get_diverse_replacements(word: str, 
+                             context: list, 
+                             topn: int=5, 
+                             diversity_weight: float=0.3):
     """
     Generate diverse but meaningful replacements for a word in context.
     
@@ -549,16 +549,25 @@ def find_contextual_replacements(word_to_replace: str,
     return False, ""
 
 
-def augment_with_chosen_method(train_df, preprocessed_evidences, corresponding_claim, 
-                                  original_evidences, original_pos_tags, file_name,
-                                  add_original_evidence, replacement_fraction, 
-                                  min_replacement_quality, min_sentence_similarity, batch_size):
-        
+def augment_with_chosen_method(train_df, 
+                               preprocessed_evidences, 
+                               corresponding_claim, 
+                               original_evidences, 
+                               original_pos_tags, 
+                               file_name,
+                               add_original_evidence, 
+                               replacement_fraction, 
+                               min_replacement_quality, 
+                               min_sentence_similarity, 
+                               batch_size,
+                               use_diverse_replacements):
         # Clone the update_augment_data function but modify to use the selected replacement method
         if Path(file_name).exists():
             overwrite = input(f"File {file_name} already exists. Would you like to overwrite it? (y/n) ")
             if overwrite != 'y':
                 return
+        else:
+            Path(file_name).parent.mkdir(parents=True, exist_ok=True)
             
         cols = ["Claim", "Evidence", "label"]
         if add_original_evidence:
@@ -600,7 +609,7 @@ def augment_with_chosen_method(train_df, preprocessed_evidences, corresponding_c
             final_word_replacement_map = {}
             
             for word in words_to_replace:
-                if args.use_diverse_replacements:
+                if use_diverse_replacements:
                     # Use contextual diverse replacements
                     found, replacement = find_contextual_replacements(
                         word, original_evidences[idx], pos_tags_dict, 
@@ -654,6 +663,7 @@ def augment_with_chosen_method(train_df, preprocessed_evidences, corresponding_c
             if len(synyonm_replaced_df) >= batch_size:
                 mode = 'w' if batch_counter == 0 else 'a'
                 header = batch_counter == 0
+                logging.info(f"Saving batch {batch_counter} to {file_name}")
                 synyonm_replaced_df.to_csv(file_name, index=False, mode=mode, header=header)
                 synyonm_replaced_df = pd.DataFrame(columns=cols)
                 batch_counter += 1
@@ -665,9 +675,9 @@ def augment_with_chosen_method(train_df, preprocessed_evidences, corresponding_c
             
             synyonm_replaced_df.to_csv(file_name, index=False, mode=mode, header=header)
         
-        # Print statistics
-        print(f"Augmentation completed: {successful_augmentations} sentences successfully augmented out of {attempted_augmentations} attempts.")
-        print(f"Success rate: {successful_augmentations/attempted_augmentations*100:.2f}%")
+        # logging.info statistics
+        logging.info(f"Augmentation completed: {successful_augmentations} sentences successfully augmented out of {attempted_augmentations} attempts.")
+        logging.info(f"Success rate: {successful_augmentations / attempted_augmentations * 100:.2f}%")
         
         return successful_augmentations
 
@@ -694,13 +704,14 @@ def main():
     args = parser.parse_args()
     
     # Load embeddings
+    global glove_embeddings
     glove_embeddings = load_cached_embeddings()
-    
-    print(f"Loading data files...")
-    train_df = pd.read_csv(TRAIN_PATH)
-    dev_df = pd.read_csv(DEV_PATH)
 
-    print(f"Processing POS tags...")
+    logging.info(f"Loading data files...")
+    train_df = pd.read_csv(config.TRAIN_FILE)
+    dev_df = pd.read_csv(config.DEV_FILE)
+
+    logging.info(f"Processing POS tags...")
     train_df['POS'] = train_df['Evidence'].apply(lambda x: nltk.pos_tag(nltk.word_tokenize(x)))
     original_evidences_pos = train_df['POS'].tolist()
     original_evidences = train_df['Evidence'].tolist()
@@ -708,12 +719,12 @@ def main():
     preprocessed_evidences = train_df['Evidence'].apply(remove_stopwords).tolist()
     corresponding_claim = train_df['Claim'].apply(remove_stopwords).tolist()
 
-    print(f"Starting data augmentation with the following parameters:")
-    print(f" - Minimum word similarity: {args.min_word_similarity}")
-    print(f" - Minimum sentence similarity: {args.min_sentence_similarity}")
-    print(f" - Replacement fraction: {args.replacement_fraction}")
-    print(f" - Using diverse contextual replacements: {args.use_diverse_replacements}")
-    print(f" - Output file: {args.output_file}")
+    logging.info(f"Starting data augmentation with the following parameters:")
+    logging.info(f" - Minimum word similarity: {args.min_word_similarity}")
+    logging.info(f" - Minimum sentence similarity: {args.min_sentence_similarity}")
+    logging.info(f" - Replacement fraction: {args.replacement_fraction}")
+    logging.info(f" - Using diverse contextual replacements: {args.use_diverse_replacements}")
+    logging.info(f" - Output file: {args.output_file}")
     
     # Run the augmentation with chosen parameters
     num_augmented = augment_with_chosen_method(
@@ -726,9 +737,10 @@ def main():
         replacement_fraction=args.replacement_fraction,
         min_replacement_quality=args.min_word_similarity,
         min_sentence_similarity=args.min_sentence_similarity,
+        use_diverse_replacements=args.use_diverse_replacements,
         file_name=args.output_file,
         batch_size=args.batch_size
     )
     
-    print(f"Data augmentation complete. {num_augmented} new examples generated.")
-    print(f"New file saved at {args.output_file}")
+    logging.info(f"Data augmentation complete. {num_augmented} new examples generated.")
+    logging.info(f"New file saved at {args.output_file}")
