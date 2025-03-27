@@ -11,6 +11,8 @@ from gensim.downloader import load as glove_embeddings_loader
 from nltk.corpus import stopwords as nltk_stopwords
 from pathlib import Path
 from tqdm import tqdm
+import json
+import datetime
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -702,6 +704,28 @@ def main():
                       help='Batch size for saving to CSV')
     
     args = parser.parse_args()
+    
+    # Save parameters to JSON file with same name as output file
+    output_path = Path(args.output_file)
+    params_file = output_path.with_suffix('.json')
+    
+    # Create a dictionary with all parameters
+    params = {
+        'output_file': args.output_file,
+        'min_word_similarity': args.min_word_similarity,
+        'min_sentence_similarity': args.min_sentence_similarity,
+        'replacement_fraction': args.replacement_fraction,
+        'use_diverse_replacements': args.use_diverse_replacements,
+        'add_original': args.add_original,
+        'batch_size': args.batch_size,
+        'date_generated': datetime.datetime.now().isoformat(),
+        'glove_model': 'glove-wiki-gigaword-300'
+    }
+    
+    # Save parameters to JSON file
+    print(f"Saving parameters to {params_file}")
+    with open(params_file, 'w') as f:
+        json.dump(params, f, indent=4)
     
     # Load embeddings
     global glove_embeddings
