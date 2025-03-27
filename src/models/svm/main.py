@@ -1,34 +1,22 @@
 import logging
 import pandas as pd
-from pathlib import Path
-import re
 import json
-import torch
 
 # Hyperparameter tuning
 import optuna
 from optuna.pruners import MedianPruner
 from optuna.samplers import TPESampler
 
-# Text processing
-from sklearn.feature_extraction.text import TfidfVectorizer
-from nltk.stem import WordNetLemmatizer
-from nltk.tokenize import word_tokenize
-
 # SVM
 from sklearn.svm import SVC
-from sklearn.metrics import (
-    accuracy_score,
-    precision_recall_fscore_support,
-    f1_score,
-    matthews_corrcoef
-)
+
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.preprocessing import StandardScaler
 
 from src.utils.utils import get_device, prepare_data, calculate_all_metrics
 from src.utils.TextPreprocessor import TextPreprocessor
 from src.utils.FeatureExtractor import FeatureExtractor
+from src.utils.GloveVectorizer import GloveVectorizer
 from src.config import config
 
 # Set up logging
@@ -63,31 +51,15 @@ def objective(trial):
     else:
         degree = 3  # Default value
     
-    # TF-IDF vectorizer parameters
-    max_features = trial.suggest_categorical("max_features", [5000, 10000, 15000, 20000])
-    min_df = trial.suggest_categorical("min_df", [1, 2, 3, 4, 5])
-    max_df = trial.suggest_categorical("max_df", [0.5, 0.6, 0.7, 0.8, 0.9])
-    ngram_range_str = trial.suggest_categorical("ngram_range", ["1,1", "1,2", "1,3"])
-    ngram_range = tuple(map(int, ngram_range_str.split(",")))
-    
     # Create pipeline
     pipeline = Pipeline([
         ('features', FeatureUnion([
             ('text_features', Pipeline([
-                ('tfidf', TfidfVectorizer(
-                    max_features=max_features,
-                    min_df=min_df,
-                    max_df=max_df,
-                    ngram_range=ngram_range,
-                    stop_words='english',
-                    analyzer='word',
-                    token_pattern=r'\w+',
-                    sublinear_tf=True
-                ))
+                ('glove', GloveVectorizer())
             ])),
             ('custom_features', FeatureExtractor())
         ])),
-        ('scaler', StandardScaler(with_mean=False)),  # TF-IDF matrices are sparse
+        ('scaler', StandardScaler()), 
         ('svm', SVC(
             C=C,
             kernel=kernel,
@@ -95,7 +67,8 @@ def objective(trial):
             degree=degree if kernel == "poly" else 3,
             probability=True
         ))
-    ])
+    ],
+    verbose=True)
     
     # Train model
     logging.info(f"Training SVM with hyperparameters: C={C}, kernel={kernel}, gamma={gamma}")
@@ -123,11 +96,16 @@ def main():
     logging.info(f"Using device: {device} (Note: scikit-learn SVM implementation will utilize CPU)")
     
     # Create a study with TPE sampler and MedianPruner
-    sampler = TPESampler(seed=42)  # TPE sampler as requested
-    pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=5, interval_steps=2)
+    sampler = TPESampler(seed=42, 
+                         n_startup_trials=int(NUM_TRIALS / 10), # First 10% of trials are random, then TPE
+                         multivariate=True, 
+                         constant_liar=True)  # TPE sampler as requested
+    pruner = MedianPruner(n_startup_trials=5, 
+                          n_warmup_steps=5, 
+                          interval_steps=2)
     
     study = optuna.create_study(
-        direction='maximize',  # Maximize accuracy
+        direction='maximize',  # Maximize macro-F1
         sampler=sampler,
         pruner=pruner,
         study_name='svm_evidence_detection'
