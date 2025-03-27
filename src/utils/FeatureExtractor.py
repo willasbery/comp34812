@@ -6,11 +6,13 @@ class FeatureExtractor:
     
     def fit(self, X, y=None):
         # Store feature names during fit
-        features = self._extract_features(X[0])  # Use first sample to get feature names
+        features = self._extract_features(X.iloc[0])  # Use first sample to get feature names
         self.feature_names = list(features.keys())
         return self
     
     def _extract_features(self, text):
+        # Convert to string if it's not already
+        text = str(text)
         claim, evidence = text.split("[SEP]")
         return {
             'text_length': len(text),
