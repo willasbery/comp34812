@@ -1,4 +1,6 @@
 import argparse
+import datetime
+import json
 import logging
 import nltk
 import numpy as np
@@ -11,8 +13,6 @@ from gensim.downloader import load as glove_embeddings_loader
 from nltk.corpus import stopwords as nltk_stopwords
 from pathlib import Path
 from tqdm import tqdm
-import json
-import datetime
 
 import warnings
 warnings.filterwarnings('ignore')
