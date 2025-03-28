@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import numpy as np
 from pathlib import Path
+import pickle
 
 # Hyperparameter tuning
 import optuna
