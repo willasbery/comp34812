@@ -1,8 +1,38 @@
-import gensim.downloader as api
+from gensim.downloader import load as glove_embeddings_loader
 from sklearn.base import BaseEstimator, TransformerMixin
 import numpy as np
+import pickle
+import logging
 
-glove_embeddings = api.load('glove-wiki-gigaword-300')
+# Import config
+from src.config import config
+
+# Define cache directory and path
+CACHE_DIR = config.DATA_DIR.parent / "cache"
+EMBEDDINGS_CACHE_PATH = CACHE_DIR / 'glove_embeddings.pkl'
+
+def load_cached_embeddings():
+    """Load GloVe embeddings from cache if available, otherwise download and cache them."""
+    
+    # Create cache directory if it doesn't exist
+    CACHE_DIR.mkdir(exist_ok=True, parents=True)
+    
+    if EMBEDDINGS_CACHE_PATH.exists():
+        logging.info(f"Loading GloVe embeddings from cache: {EMBEDDINGS_CACHE_PATH}")
+        with open(EMBEDDINGS_CACHE_PATH, 'rb') as f:
+            glove_embeddings = pickle.load(f)
+    else:
+        logging.info(f"Downloading GloVe embeddings (this might take a while)...")
+        glove_embeddings = glove_embeddings_loader('glove-wiki-gigaword-300')
+        
+        # Cache the embeddings for future use
+        logging.info(f"Caching GloVe embeddings to: {EMBEDDINGS_CACHE_PATH}")
+        with open(EMBEDDINGS_CACHE_PATH, 'wb') as f:
+            pickle.dump(glove_embeddings, f)
+    
+    return glove_embeddings
+
+glove_embeddings = load_cached_embeddings()
 
 class GloveVectorizer(BaseEstimator, TransformerMixin):
     def __init__(self, sep_token: str = '[SEP]'):
