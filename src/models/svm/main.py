@@ -4,6 +4,11 @@ import json
 import numpy as np
 from pathlib import Path
 import pickle
+import time
+import psutil
+import gc
+from tqdm import tqdm
+from contextlib import contextmanager
 
 # Hyperparameter tuning
 import optuna
@@ -28,24 +33,120 @@ from src.utils.GloveVectorizer import GloveVectorizer
 from src.config import config
 
 # Set up logging
-logging.basicConfig(format='%(asctime)s - %(message)s',
+logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Memory monitoring
+def get_memory_usage():
+    """Get current memory usage in MB."""
+    process = psutil.Process()
+    return process.memory_info().rss / (1024 * 1024)
+
+@contextmanager
+def timer(name):
+    """Context manager for timing code execution."""
+    start_time = time.time()
+    try:
+        yield
+    finally:
+        end_time = time.time()
+        logger.info(f"{name} completed in {end_time - start_time:.2f} seconds")
 
 
 NUM_TRIALS = 10
+
+# Store initial memory usage
+initial_memory = get_memory_usage()
+logger.info(f"Initial memory usage: {initial_memory:.2f} MB")
 
 train_df = pd.read_csv(config.TRAIN_FILE)
 dev_df = pd.read_csv(config.DEV_FILE)
 train_aug_df = pd.read_csv(config.AUG_TRAIN_FILE)
 
-train_df, dev_df, train_labels, dev_labels = prepare_data(train_df, train_aug_df, dev_df)
+with timer("Data preparation"):
+    train_df, dev_df, train_labels, dev_labels = prepare_data(train_df, train_aug_df, dev_df)
+    logger.info(f"Prepared data: {len(train_df)} training samples, {len(dev_df)} validation samples")
+    logger.info(f"Memory after data prep: {get_memory_usage():.2f} MB (+ {get_memory_usage() - initial_memory:.2f} MB)")
+
+class LoggingPipeline(Pipeline):
+    """Pipeline extension that logs progress of steps."""
+    
+    def fit(self, X, y=None, **fit_params):
+        logger.info(f"Starting pipeline fit on {len(X)} samples")
+        start_time = time.time()
+        mem_before = get_memory_usage()
+        
+        for step_idx, (name, transform) in enumerate(self.steps[:-1]):
+            logger.info(f"Fitting step {step_idx+1}/{len(self.steps)}: {name}")
+            step_start = time.time()
+            
+            # Special handling for FeatureUnion to log each part
+            if name == 'features' and isinstance(transform, FeatureUnion):
+                for feat_name, feat_transform in transform.transformer_list:
+                    feat_start = time.time()
+                    logger.info(f"  Fitting feature extractor: {feat_name}")
+                    # For GloveVectorizer, log more details
+                    if 'glove' in str(feat_transform).lower():
+                        logger.info(f"  Extracting GloVe vectors with positional encoding")
+                    
+            if hasattr(transform, "fit_transform"):
+                if y is not None:
+                    X = transform.fit_transform(X, y)
+                else:
+                    X = transform.fit_transform(X)
+            else:
+                transform.fit(X, y)
+                X = transform.transform(X)
+                
+            step_end = time.time()
+            logger.info(f"  Step {name} completed in {step_end - step_start:.2f} seconds")
+            logger.info(f"  Memory after step: {get_memory_usage():.2f} MB (+ {get_memory_usage() - mem_before:.2f} MB)")
+            logger.info(f"  Output shape: {X.shape if hasattr(X, 'shape') else 'unknown'}")
+            
+        # Fit the final estimator
+        logger.info(f"Fitting final estimator: {self.steps[-1][0]}")
+        final_start = time.time()
+        self.steps[-1][1].fit(X, y)
+        final_end = time.time()
+        logger.info(f"Final estimator fitted in {final_end - final_start:.2f} seconds")
+        
+        total_time = time.time() - start_time
+        logger.info(f"Total pipeline fit completed in {total_time:.2f} seconds")
+        logger.info(f"Final memory usage: {get_memory_usage():.2f} MB (+ {get_memory_usage() - mem_before:.2f} MB)")
+        
+        return self
+    
+    def predict(self, X):
+        logger.info(f"Starting prediction on {len(X)} samples")
+        start_time = time.time()
+        
+        for step_idx, (name, transform) in enumerate(self.steps[:-1]):
+            logger.info(f"Transforming step {step_idx+1}/{len(self.steps)-1}: {name}")
+            step_start = time.time()
+            X = transform.transform(X)
+            step_end = time.time()
+            logger.info(f"  Step {name} transform completed in {step_end - step_start:.2f} seconds")
+        
+        logger.info(f"Predicting with final estimator: {self.steps[-1][0]}")
+        pred_start = time.time()
+        y_pred = self.steps[-1][1].predict(X)
+        pred_end = time.time()
+        logger.info(f"Prediction completed in {pred_end - pred_start:.2f} seconds")
+        logger.info(f"Total prediction time: {time.time() - start_time:.2f} seconds")
+        
+        return y_pred
+
 
 def objective(trial):
     """Optuna objective function for hyperparameter optimization."""
     # Load data
     global train_df, dev_df, train_labels, dev_labels
     trial_number = trial.number
+    
+    logger.info(f"\n{'='*50}\nStarting trial {trial_number}/{NUM_TRIALS}\n{'='*50}")
+    trial_start = time.time()
     
     # Suggest hyperparameters
     C = trial.suggest_float("C", 0.01, 100.0, log=True)
@@ -72,6 +173,12 @@ def objective(trial):
     
     # TF-IDF weighting for GloVe
     use_tfidf_weighting = trial.suggest_categorical("use_tfidf_weighting", [True, False])
+    
+    logger.info(f"Trial {trial_number} hyperparameters:")
+    logger.info(f"  SVM: C={C}, kernel={kernel}, gamma={gamma}, class_weight={class_weight}")
+    logger.info(f"  Feature selection: {use_feature_selection} "
+               f"(method={feature_selection_method if use_feature_selection else 'N/A'})")
+    logger.info(f"  GloVe TF-IDF weighting: {use_tfidf_weighting}")
     
     # Create feature pipeline
     feature_pipeline = []
@@ -116,54 +223,43 @@ def objective(trial):
         random_state=42
     )))
     
-    # Create the pipeline
-    pipeline = Pipeline(pipeline_steps, verbose=True)
+    # Create the pipeline with logging
+    pipeline = LoggingPipeline(pipeline_steps, verbose=True)
     
-    # Create cross-validation strategy
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    # Train model
+    with timer(f"Trial {trial_number} training"):
+        pipeline.fit(train_df['text'], train_labels)
     
-    # Train model with cross-validation
-    logging.info(f"Training SVM with hyperparameters: C={C}, kernel={kernel}, gamma={gamma}, class_weight={class_weight}")
-    
-    # Use cross-validation for more robust evaluation
-    cv_scores = cross_val_score(
-        pipeline, 
-        train_df['text'], 
-        train_labels, 
-        cv=cv,
-        scoring=make_scorer(f1_score, average='weighted'),
-        n_jobs=-1
-    )
-    mean_cv_score = np.mean(cv_scores)
-    
-    # Also train on full training set and evaluate on dev set for comparison
-    pipeline.fit(train_df['text'], train_labels)
-    dev_preds = pipeline.predict(dev_df['text'])
-    metrics = calculate_all_metrics(dev_labels, dev_preds)
+    # Evaluate on dev set
+    with timer(f"Trial {trial_number} evaluation"):
+        dev_preds = pipeline.predict(dev_df['text'])
+        metrics = calculate_all_metrics(dev_labels, dev_preds)
     
     # Save trial results
     svm_dir = config.SAVE_DIR / "svm"
     svm_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Add CV scores to metrics
-    metrics["cv_f1_scores"] = cv_scores.tolist()
-    metrics["mean_cv_f1"] = mean_cv_score
-    
     with (svm_dir / f'svm_{trial_number}.json').open('w') as f:
         combined_results = {**metrics, **trial.params}
         json.dump(combined_results, f)
     
-    # Use cross-validation score for optimization
-    return mean_cv_score
+    trial_duration = time.time() - trial_start
+    logger.info(f"Trial {trial_number} completed in {trial_duration:.2f} seconds")
+    logger.info(f"Trial {trial_number} results: W Macro-F1 = {metrics['W Macro-F1']:.4f}")
+    
+    # Explicitly collect garbage to free memory
+    gc.collect()
+    
+    return metrics["W Macro-F1"]
 
 def main():
-    print("\nHYPERPARAMETER TUNING")
-    print("=====================")
-    print(f"Running {NUM_TRIALS} trials...")
+    logger.info("\n" + "="*70)
+    logger.info("EVIDENCE DETECTION SVM MODEL TRAINING")
+    logger.info("="*70)
+    logger.info(f"Running {NUM_TRIALS} hyperparameter optimization trials...")
     
     # Check if GPU is available for NumPy/SciPy operations
     device = get_device()
-    logging.info(f"Using device: {device} (Note: scikit-learn SVM implementation will utilize CPU)")
+    logger.info(f"Using device: {device} (Note: scikit-learn SVM implementation will utilize CPU)")
     
     # Create a study with TPE sampler and MedianPruner
     sampler = TPESampler(seed=42, 
@@ -182,16 +278,17 @@ def main():
     )
     
     try:
-        study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=3)
+        with timer("Hyperparameter optimization"):
+            study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=3)
     except KeyboardInterrupt:
-        print("Hyperparameter tuning interrupted.")
+        logger.warning("Hyperparameter tuning interrupted by user.")
     
-    print("\nBest trial:")
+    logger.info("\nBest trial:")
     trial = study.best_trial
-    print(f"  Value (Mean CV F1): {trial.value}")
-    print("  Params:")
+    logger.info(f"  Value (W Macro-F1): {trial.value:.4f}")
+    logger.info("  Params:")
     for key, value in trial.params.items():
-        print(f"    {key}: {value}")
+        logger.info(f"    {key}: {value}")
         
     # Train final model with best parameters and save
     best_params = trial.params.copy()
@@ -203,16 +300,24 @@ def main():
     combined_df = pd.concat([train_df, dev_df])
     combined_labels = np.concatenate([train_labels, dev_labels])
     
-    print("\nTraining final model with best parameters on all data...")
-    final_pipeline.fit(combined_df['text'], combined_labels)
+    logger.info("\n" + "="*70)
+    logger.info("TRAINING FINAL MODEL")
+    logger.info("="*70)
+    logger.info(f"Training final model with best parameters on all data ({len(combined_df)} samples)...")
+    
+    with timer("Final model training"):
+        final_pipeline.fit(combined_df['text'], combined_labels)
     
     # Save the final model
     final_model_path = config.SAVE_DIR / "svm" / "final_model.pkl"
-    with open(final_model_path, 'wb') as f:
-        pickle.dump(final_pipeline, f)
+    with timer("Model saving"):
+        with open(final_model_path, 'wb') as f:
+            pickle.dump(final_pipeline, f)
     
-    print(f"Final model saved to {final_model_path}")
-    
+    logger.info(f"Final model saved to {final_model_path}")
+    logger.info(f"Final memory usage: {get_memory_usage():.2f} MB")
+    logger.info("Training completed successfully!")
+
 def create_pipeline_from_params(params):
     """Create a pipeline from the best parameters."""
     # Extract parameters
@@ -270,5 +375,5 @@ def create_pipeline_from_params(params):
         random_state=42
     )))
     
-    # Create the pipeline
-    return Pipeline(pipeline_steps)
+    # Create the pipeline with logging capabilities
+    return LoggingPipeline(pipeline_steps)

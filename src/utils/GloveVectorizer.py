@@ -81,21 +81,55 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         return np.zeros(self.vector_size)
     
     def _get_positional_encoding(self, max_len: int, d_model: int) -> np.ndarray:
-        """Generate sinusoidal positional encoding matrix."""
-        position = np.arange(max_len)[:, np.newaxis]
-        div_term = np.exp(np.arange(0, d_model, 2) * (-np.log(10000.0) / d_model))
+        """Generate sinusoidal positional encoding matrix.
+        
+        Arguments:
+            max_len: Maximum sequence length to encode
+            d_model: Dimensionality of the model/embeddings
+            
+        Returns:
+            A matrix of shape (max_len, d_model) with positional encodings
+            
+        Note:
+            This implements the sinusoidal position encoding from 
+            "Attention Is All You Need" (Vaswani et al., 2017).
+            PE(pos, 2i) = sin(pos/10000^(2i/d_model))
+            PE(pos, 2i+1) = cos(pos/10000^(2i/d_model))
+        """
+        # Pre-compute position and dimension arrays
+        positions = np.arange(max_len)[:, np.newaxis]  # Shape: (max_len, 1)
+        
+        # Create the div_term with proper shape for broadcasting
+        div_term = np.exp(-(np.log(10000.0) / d_model) * np.arange(0, d_model, 2))
+        
+        # Initialize the encoding matrix
         pe = np.zeros((max_len, d_model))
-        pe[:, 0::2] = np.sin(position * div_term)
-        pe[:, 1::2] = np.cos(position * div_term)
+        
+        # Set even indices to sine, odd indices to cosine
+        pe[:, 0::2] = np.sin(positions * div_term)
+        if d_model > 1:  # Handle case where d_model might be 1
+            pe[:, 1::2] = np.cos(positions * div_term[:pe.shape[1]//2])
+            
         return pe
 
     def _extract_positional_features(self, text: str) -> np.ndarray:
-        """Extract features using sinusoidal positional encoding."""
+        """Extract features using sinusoidal positional encoding.
+        
+        Applies positional encoding to word vectors to capture sequential information
+        in the input text. This allows the model to understand the position of
+        words in the sequence, similar to how transformers encode position.
+        
+        Arguments:
+            text: Input text string
+            
+        Returns:
+            A vector of size self.vector_size with positionally encoded features
+        """
         words = text.split()
         if not words:
             return np.zeros(self.vector_size)
             
-        # Get word vectors for all words
+        # Get word vectors for words that exist in the embeddings
         word_vectors = []
         for word in words:
             if word in self.glove:
@@ -104,14 +138,15 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         if not word_vectors:
             return np.zeros(self.vector_size)
             
-        # Stack word vectors into a matrix
+        # Stack word vectors into a matrix: shape (sequence_length, embedding_dim)
         word_vectors = np.stack(word_vectors)
+        sequence_length = word_vectors.shape[0]
         
-        # Generate positional encoding
-        pe = self._get_positional_encoding(len(word_vectors), self.vector_size)
+        # Generate positional encoding of appropriate size
+        pe = self._get_positional_encoding(sequence_length, self.vector_size)
         
         # Apply positional encoding to word vectors
-        positionally_encoded = word_vectors + pe[:len(word_vectors)]
+        positionally_encoded = word_vectors + pe[:sequence_length]
         
         # Return mean of positionally encoded vectors
         return np.mean(positionally_encoded, axis=0)
