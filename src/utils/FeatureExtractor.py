@@ -18,18 +18,8 @@ class FeatureExtractor:
         self.sentiment_analyzer = SentimentIntensityAnalyzer()
         self.tfidf = TfidfVectorizer(max_features=100, stop_words='english')
         
-    def fit_transform(self, X, y=None):
+    def transform(self, X):
         features = []
-        
-        # Prepare for TF-IDF
-        all_texts = []
-        for text in X:
-            claim, evidence = text.split("[SEP]")
-            all_texts.append(claim)
-            all_texts.append(evidence)
-        
-        # Fit TF-IDF on all texts
-        self.tfidf.fit(all_texts)
         
         for text in X:
             claim, evidence = text.split("[SEP]")
@@ -86,10 +76,7 @@ class FeatureExtractor:
             
             features.append(feature_dict)
             
-        return pd.DataFrame(features)
-    
-    def transform(self, X):
-        return self.fit_transform(X)
+        return pd.DataFrame(features)    
     
     def fit(self, X, y=None):
         # Prepare for TF-IDF

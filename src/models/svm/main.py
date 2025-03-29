@@ -33,7 +33,7 @@ logging.basicConfig(format='%(asctime)s - %(message)s',
                     level=logging.INFO)
 
 
-NUM_TRIALS = 50
+NUM_TRIALS = 10
 
 train_df = pd.read_csv(config.TRAIN_FILE)
 dev_df = pd.read_csv(config.DEV_FILE)
@@ -182,7 +182,7 @@ def main():
     )
     
     try:
-        study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=-1)
+        study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=3)
     except KeyboardInterrupt:
         print("Hyperparameter tuning interrupted.")
     

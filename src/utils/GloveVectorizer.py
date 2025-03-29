@@ -80,23 +80,41 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
             
         return np.zeros(self.vector_size)
     
+    def _get_positional_encoding(self, max_len: int, d_model: int) -> np.ndarray:
+        """Generate sinusoidal positional encoding matrix."""
+        position = np.arange(max_len)[:, np.newaxis]
+        div_term = np.exp(np.arange(0, d_model, 2) * (-np.log(10000.0) / d_model))
+        pe = np.zeros((max_len, d_model))
+        pe[:, 0::2] = np.sin(position * div_term)
+        pe[:, 1::2] = np.cos(position * div_term)
+        return pe
+
     def _extract_positional_features(self, text: str) -> np.ndarray:
-        """Extract features based on word positions."""
+        """Extract features using sinusoidal positional encoding."""
         words = text.split()
         if not words:
-            return np.zeros(4)
+            return np.zeros(self.vector_size)
             
-        # Get vectors for first and last words if they exist in embeddings
-        first_word_vec = self.glove[words[0]] if words[0] in self.glove else np.zeros(self.vector_size)
-        last_word_vec = self.glove[words[-1]] if words[-1] in self.glove and len(words) > 1 else np.zeros(self.vector_size)
+        # Get word vectors for all words
+        word_vectors = []
+        for word in words:
+            if word in self.glove:
+                word_vectors.append(self.glove[word])
         
-        # Return mean of first and last word vectors as positional feature
-        if np.any(first_word_vec) or np.any(last_word_vec):
-            return np.concatenate([
-                np.mean([first_word_vec], axis=0),  # First word
-                np.mean([last_word_vec], axis=0),   # Last word
-            ])
-        return np.zeros(self.vector_size * 2)
+        if not word_vectors:
+            return np.zeros(self.vector_size)
+            
+        # Stack word vectors into a matrix
+        word_vectors = np.stack(word_vectors)
+        
+        # Generate positional encoding
+        pe = self._get_positional_encoding(len(word_vectors), self.vector_size)
+        
+        # Apply positional encoding to word vectors
+        positionally_encoded = word_vectors + pe[:len(word_vectors)]
+        
+        # Return mean of positionally encoded vectors
+        return np.mean(positionally_encoded, axis=0)
     
     def fit(self, X, y=None):
         if self.use_tfidf_weighting:
