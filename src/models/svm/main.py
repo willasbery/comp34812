@@ -2,13 +2,9 @@ import logging
 import pandas as pd
 import json
 import numpy as np
-from pathlib import Path
 import pickle
 import time
-import psutil
 import gc
-from tqdm import tqdm
-from contextlib import contextmanager
 
 # Hyperparameter tuning
 import optuna
@@ -21,38 +17,21 @@ from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import SelectFromModel, SelectKBest, f_classif, RFECV
-from sklearn.model_selection import cross_val_score, StratifiedKFold
 from sklearn.decomposition import PCA
-from sklearn.metrics import make_scorer, f1_score
 from sklearn.ensemble import RandomForestClassifier
 
-from src.utils.utils import get_device, prepare_data, calculate_all_metrics
-from src.utils.TextPreprocessor import TextPreprocessor
+from src.utils.utils import get_device, prepare_data, calculate_all_metrics, get_memory_usage, timer
 from src.utils.FeatureExtractor import FeatureExtractor
 from src.utils.GloveVectorizer import GloveVectorizer
+from src.utils.LoggingPipeline import LoggingPipeline
 from src.config import config
 
 # Set up logging
 # logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
 #                     datefmt='%Y-%m-%d %H:%M:%S',
 #                     level=logging.INFO)
+
 logger = logging.getLogger(__name__)
-
-# Memory monitoring
-def get_memory_usage():
-    """Get current memory usage in MB."""
-    process = psutil.Process()
-    return process.memory_info().rss / (1024 * 1024)
-
-@contextmanager
-def timer(name):
-    """Context manager for timing code execution."""
-    start_time = time.time()
-    try:
-        yield
-    finally:
-        end_time = time.time()
-        logger.info(f"{name} completed in {end_time - start_time:.2f} seconds")
 
 
 NUM_TRIALS = 50
@@ -156,7 +135,7 @@ def objective(trial):
     )))
     
     # Create the pipeline with logging
-    pipeline = Pipeline(pipeline_steps, verbose=True)
+    pipeline = LoggingPipeline(pipeline_steps, verbose=True)
     
     # Train model
     with timer(f"Trial {trial_number} training"):
@@ -308,7 +287,7 @@ def create_pipeline_from_params(params):
     )))
     
     # Create the pipeline with logging capabilities
-    return Pipeline(pipeline_steps)
+    return LoggingPipeline(pipeline_steps)
 
 # if __name__ == "__main__":
 #     main()
