@@ -80,7 +80,7 @@ def get_memory_usage():
     return process.memory_info().rss / (1024 * 1024)
 
 @contextmanager
-def timer(name):
+def timer(name, logger):
     """Context manager for timing code execution."""
     start_time = time.time()
     try:
