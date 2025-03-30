@@ -55,7 +55,7 @@ def timer(name):
         logger.info(f"{name} completed in {end_time - start_time:.2f} seconds")
 
 
-NUM_TRIALS = 10
+NUM_TRIALS = 50
 
 # Store initial memory usage
 initial_memory = get_memory_usage()
@@ -211,7 +211,7 @@ def main():
     
     try:
         with timer("Hyperparameter optimization"):
-            study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=3)
+            study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=5)
     except KeyboardInterrupt:
         logger.warning("Hyperparameter tuning interrupted by user.")
     
