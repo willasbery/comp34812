@@ -33,9 +33,9 @@ from src.utils.GloveVectorizer import GloveVectorizer
 from src.config import config
 
 # Set up logging
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.INFO)
+# logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
+#                     datefmt='%Y-%m-%d %H:%M:%S',
+#                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Memory monitoring
@@ -309,3 +309,6 @@ def create_pipeline_from_params(params):
     
     # Create the pipeline with logging capabilities
     return Pipeline(pipeline_steps)
+
+# if __name__ == "__main__":
+#     main()
