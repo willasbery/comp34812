@@ -308,4 +308,4 @@ def create_pipeline_from_params(params):
     )))
     
     # Create the pipeline with logging capabilities
-    return LoggingPipeline(pipeline_steps)
+    return Pipeline(pipeline_steps)
