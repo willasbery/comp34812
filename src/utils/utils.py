@@ -1,6 +1,8 @@
 import pandas as pd # Much faster than pandas 
 import numpy as np
-from pathlib import Path
+import psutil
+import time
+from contextlib import contextmanager
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
@@ -70,3 +72,19 @@ def calculate_all_metrics(y_true, y_pred):
     }
     
     return metrics
+
+# Memory monitoring
+def get_memory_usage():
+    """Get current memory usage in MB."""
+    process = psutil.Process()
+    return process.memory_info().rss / (1024 * 1024)
+
+@contextmanager
+def timer(name, logger):
+    """Context manager for timing code execution."""
+    start_time = time.time()
+    try:
+        yield
+    finally:
+        end_time = time.time()
+        logger.info(f"{name} completed in {end_time - start_time:.2f} seconds")

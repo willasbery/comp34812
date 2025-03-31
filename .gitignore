@@ -172,3 +172,4 @@ cython_debug/
 
 # Data
 data/training_data/
+cache/

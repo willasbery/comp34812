@@ -24,13 +24,16 @@ logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO)
 
-NUM_TRIALS = 25
+NUM_TRIALS = 100
     
 train_df = pd.read_csv(config.TRAIN_FILE)
-aug_train_df = pd.read_csv(config.AUG_TRAIN_FILE)
+aug_train_df = pd.read_csv(config.AUG_TRAIN_HIGH_REPLACEMENT_FILE)
 dev_df = pd.read_csv(config.DEV_FILE)
    
 train_df, dev_df, train_labels, dev_labels = prepare_data(train_df, aug_train_df, dev_df)
+
+logging.info(f"Training data shape: {train_df.shape}")
+logging.info(f"Dev data shape: {dev_df.shape}")
 
 def objective(trial):    
     # XGBoost hyperparameters
@@ -112,9 +115,9 @@ def objective(trial):
     return metrics['W Macro-F1']
 
 def main():
-    print("\nHYPERPARAMETER TUNING")
-    print("=====================")
-    print(f"Running {NUM_TRIALS} trials...")
+    logging.info("\nHYPERPARAMETER TUNING")
+    logging.info("=====================")
+    logging.info(f"Running {NUM_TRIALS} trials...")
     
     # Create a study with TPE sampler and MedianPruner
     sampler = TPESampler(seed=42, 
@@ -136,11 +139,11 @@ def main():
     try:
         study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=-1)
     except KeyboardInterrupt:
-        print("Hyperparameter tuning interrupted.")
+        logging.info("Hyperparameter tuning interrupted.")
     
-    print("\nBest trial:")
+    logging.info("\nBest trial:")
     trial = study.best_trial
-    print(f"  Value (Accuracy): {trial.value}")
-    print("  Params:")
+    logging.info(f"  Value (Accuracy): {trial.value}")
+    logging.info("  Params:")
     for key, value in trial.params.items():
-        print(f"    {key}: {value}")
+        logging.info(f"    {key}: {value}")
