@@ -1,57 +1,63 @@
 import logging
 import pandas as pd
-from pathlib import Path
-import re
 import json
-import torch
+import numpy as np
+import pickle
+import time
+import gc
 
 # Hyperparameter tuning
 import optuna
 from optuna.pruners import MedianPruner
 from optuna.samplers import TPESampler
 
-# Text processing
-from sklearn.feature_extraction.text import TfidfVectorizer
-from nltk.stem import WordNetLemmatizer
-from nltk.tokenize import word_tokenize
-
 # SVM
 from sklearn.svm import SVC
-from sklearn.metrics import (
-    accuracy_score,
-    precision_recall_fscore_support,
-    f1_score,
-    matthews_corrcoef
-)
+
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import SelectFromModel, SelectKBest, f_classif, RFECV
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
 
-from src.utils.utils import get_device, prepare_data, calculate_all_metrics
-from src.utils.TextPreprocessor import TextPreprocessor
+from src.utils.utils import get_device, prepare_data, calculate_all_metrics, get_memory_usage, timer
 from src.utils.FeatureExtractor import FeatureExtractor
+from src.utils.GloveVectorizer import GloveVectorizer
+from src.utils.LoggingPipeline import LoggingPipeline
 from src.config import config
 
 # Set up logging
-logging.basicConfig(format='%(asctime)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.INFO)
+# logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
+#                     datefmt='%Y-%m-%d %H:%M:%S',
+#                     level=logging.INFO)
+
+logger = logging.getLogger(__name__)
 
 
-NUM_TRIALS = 10
+NUM_TRIALS = 50
+
+# Store initial memory usage
+initial_memory = get_memory_usage()
+logger.info(f"Initial memory usage: {initial_memory:.2f} MB")
 
 train_df = pd.read_csv(config.TRAIN_FILE)
 dev_df = pd.read_csv(config.DEV_FILE)
 train_aug_df = pd.read_csv(config.AUG_TRAIN_FILE)
 
-train_df, dev_df, train_labels, dev_labels = prepare_data(train_df, train_aug_df, dev_df)
+with timer("Data preparation", logger):
+    train_df, dev_df, train_labels, dev_labels = prepare_data(train_df, train_aug_df, dev_df)
+    logger.info(f"Prepared data: {len(train_df)} training samples, {len(dev_df)} validation samples")
+    logger.info(f"Memory after data prep: {get_memory_usage():.2f} MB (+ {get_memory_usage() - initial_memory:.2f} MB)")
 
-trial_number = 0
 
 def objective(trial):
     """Optuna objective function for hyperparameter optimization."""
     # Load data
-    global trial_number, train_df, dev_df, train_labels, dev_labels
-    trial_number += 1
+    global train_df, dev_df, train_labels, dev_labels
+    trial_number = trial.number
+    
+    logger.info(f"\n{'='*50}\nStarting trial {trial_number}/{NUM_TRIALS}\n{'='*50}")
+    trial_start = time.time()
     
     # Suggest hyperparameters
     C = trial.suggest_float("C", 0.01, 100.0, log=True)
@@ -63,84 +69,225 @@ def objective(trial):
     else:
         degree = 3  # Default value
     
-    # TF-IDF vectorizer parameters
-    max_features = trial.suggest_categorical("max_features", [5000, 10000, 15000, 20000])
-    min_df = trial.suggest_categorical("min_df", [1, 2, 3, 4, 5])
-    max_df = trial.suggest_categorical("max_df", [0.5, 0.6, 0.7, 0.8, 0.9])
-    ngram_range_str = trial.suggest_categorical("ngram_range", ["1,1", "1,2", "1,3"])
-    ngram_range = tuple(map(int, ngram_range_str.split(",")))
+    # Feature selection parameters
+    use_feature_selection = trial.suggest_categorical("use_feature_selection", [True, False])
+    if use_feature_selection:
+        feature_selection_method = trial.suggest_categorical("feature_selection_method", 
+                                                           ["kbest", "model_based", "pca"])
+        if feature_selection_method == "kbest":
+            k_best = trial.suggest_int("k_best", 10, 100)
+        elif feature_selection_method == "pca":
+            n_components = trial.suggest_float("n_components", 0.7, 0.99)
     
-    # Create pipeline
-    pipeline = Pipeline([
-        ('features', FeatureUnion([
-            ('text_features', Pipeline([
-                ('tfidf', TfidfVectorizer(
-                    max_features=max_features,
-                    min_df=min_df,
-                    max_df=max_df,
-                    ngram_range=ngram_range,
-                    stop_words='english',
-                    analyzer='word',
-                    token_pattern=r'\w+',
-                    sublinear_tf=True
-                ))
-            ])),
-            ('custom_features', FeatureExtractor())
-        ])),
-        ('scaler', StandardScaler(with_mean=False)),  # TF-IDF matrices are sparse
-        ('svm', SVC(
-            C=C,
-            kernel=kernel,
-            gamma=gamma,
-            degree=degree if kernel == "poly" else 3,
-            probability=True
-        ))
-    ])
+    # Class weighting for imbalanced data
+    class_weight = trial.suggest_categorical("class_weight", ["balanced", None])
+    
+    # TF-IDF weighting for GloVe
+    use_tfidf_weighting = trial.suggest_categorical("use_tfidf_weighting", [True, False])
+    
+    logger.info(f"Trial {trial_number} hyperparameters:")
+    logger.info(f"  SVM: C={C}, kernel={kernel}, gamma={gamma}, class_weight={class_weight}")
+    logger.info(f"  Feature selection: {use_feature_selection} "
+               f"(method={feature_selection_method if use_feature_selection else 'N/A'})")
+    logger.info(f"  GloVe TF-IDF weighting: {use_tfidf_weighting}")
+    
+    # Create feature pipeline
+    feature_pipeline = []
+    
+    # Add text features
+    feature_pipeline.append(
+        ('text_features', Pipeline([
+            ('glove', GloveVectorizer(use_tfidf_weighting=use_tfidf_weighting))
+        ]))
+    )
+    
+    # Add custom features
+    feature_pipeline.append(
+        ('custom_features', FeatureExtractor())
+    )
+    
+    # Create main pipeline
+    pipeline_steps = [
+        ('features', FeatureUnion(feature_pipeline)),
+        ('scaler', StandardScaler())
+    ]
+    
+    # Add feature selection if enabled
+    if use_feature_selection:
+        if feature_selection_method == "kbest":
+            pipeline_steps.append(('feature_selection', SelectKBest(f_classif, k=k_best)))
+        elif feature_selection_method == "model_based":
+            pipeline_steps.append(('feature_selection', SelectFromModel(
+                RandomForestClassifier(n_estimators=100, random_state=42)
+            )))
+        elif feature_selection_method == "pca":
+            pipeline_steps.append(('feature_selection', PCA(n_components=n_components)))
+    
+    # Add SVM classifier
+    pipeline_steps.append(('svm', SVC(
+        C=C,
+        kernel=kernel,
+        gamma=gamma,
+        degree=degree if kernel == "poly" else 3,
+        probability=True,
+        class_weight=class_weight,
+        random_state=42
+    )))
+    
+    # Create the pipeline with logging
+    pipeline = LoggingPipeline(pipeline_steps, verbose=True, logger=logger)
     
     # Train model
-    logging.info(f"Training SVM with hyperparameters: C={C}, kernel={kernel}, gamma={gamma}")
-    pipeline.fit(train_df['text'], train_labels)
+    with timer(f"Trial {trial_number} training", logger):
+        pipeline.fit(train_df['text'], train_labels)
     
     # Evaluate on dev set
-    dev_preds = pipeline.predict(dev_df['text'])
-    metrics = calculate_all_metrics(dev_labels, dev_preds)
+    with timer(f"Trial {trial_number} evaluation", logger):
+        dev_preds = pipeline.predict(dev_df['text'])
+        metrics = calculate_all_metrics(dev_labels, dev_preds)
     
+    # Save trial results
     svm_dir = config.SAVE_DIR / "svm"
     svm_dir.mkdir(parents=True, exist_ok=True)
     with (svm_dir / f'svm_{trial_number}.json').open('w') as f:
         combined_results = {**metrics, **trial.params}
         json.dump(combined_results, f)
     
+    trial_duration = time.time() - trial_start
+    logger.info(f"Trial {trial_number} completed in {trial_duration:.2f} seconds")
+    logger.info(f"Trial {trial_number} results: W Macro-F1 = {metrics['W Macro-F1']:.4f}")
+    
+    # Explicitly collect garbage to free memory
+    gc.collect()
+    
     return metrics["W Macro-F1"]
 
 def main():
-    print("\nHYPERPARAMETER TUNING")
-    print("=====================")
-    print(f"Running {NUM_TRIALS} trials...")
+    logger.info("\n" + "="*70)
+    logger.info("EVIDENCE DETECTION SVM MODEL TRAINING")
+    logger.info("="*70)
+    logger.info(f"Running {NUM_TRIALS} hyperparameter optimization trials...")
     
     # Check if GPU is available for NumPy/SciPy operations
     device = get_device()
-    logging.info(f"Using device: {device} (Note: scikit-learn SVM implementation will utilize CPU)")
+    logger.info(f"Using device: {device} (Note: scikit-learn SVM implementation will utilize CPU)")
     
     # Create a study with TPE sampler and MedianPruner
-    sampler = TPESampler(seed=42)  # TPE sampler as requested
-    pruner = MedianPruner(n_startup_trials=5, n_warmup_steps=5, interval_steps=2)
+    sampler = TPESampler(seed=42, 
+                         n_startup_trials=int(NUM_TRIALS / 10), # First 10% of trials are random, then TPE
+                         multivariate=True, 
+                         constant_liar=True)  # TPE sampler as requested
+    pruner = MedianPruner(n_startup_trials=5, 
+                          n_warmup_steps=5, 
+                          interval_steps=2)
     
     study = optuna.create_study(
-        direction='maximize',  # Maximize accuracy
+        direction='maximize',  # Maximize F1 score
         sampler=sampler,
         pruner=pruner,
         study_name='svm_evidence_detection'
     )
     
     try:
-        study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=-1)
+        with timer("Hyperparameter optimization", logger):
+            study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=5)
     except KeyboardInterrupt:
-        print("Hyperparameter tuning interrupted.")
+        logger.warning("Hyperparameter tuning interrupted by user.")
     
-    print("\nBest trial:")
+    logger.info("\nBest trial:")
     trial = study.best_trial
-    print(f"  Value (Accuracy): {trial.value}")
-    print("  Params:")
+    logger.info(f"  Value (W Macro-F1): {trial.value:.4f}")
+    logger.info("  Params:")
     for key, value in trial.params.items():
-        print(f"    {key}: {value}")
+        logger.info(f"    {key}: {value}")
+        
+    # Train final model with best parameters and save
+    best_params = trial.params.copy()
+    
+    # Create final model pipeline with best parameters
+    final_pipeline = create_pipeline_from_params(best_params)
+    
+    # Train on combined training + validation for final model
+    combined_df = pd.concat([train_df, dev_df])
+    combined_labels = np.concatenate([train_labels, dev_labels])
+    
+    logger.info("\n" + "="*70)
+    logger.info("TRAINING FINAL MODEL")
+    logger.info("="*70)
+    logger.info(f"Training final model with best parameters on all data ({len(combined_df)} samples)...")
+    
+    with timer("Final model training", logger):
+        final_pipeline.fit(combined_df['text'], combined_labels)
+    
+    # Save the final model
+    final_model_path = config.SAVE_DIR / "svm" / "final_model.pkl"
+    with timer("Model saving", logger):
+        with open(final_model_path, 'wb') as f:
+            pickle.dump(final_pipeline, f)
+    
+    logger.info(f"Final model saved to {final_model_path}")
+    logger.info(f"Final memory usage: {get_memory_usage():.2f} MB")
+    logger.info("Training completed successfully!")
+
+def create_pipeline_from_params(params):
+    """Create a pipeline from the best parameters."""
+    # Extract parameters
+    C = params.get("C")
+    kernel = params.get("kernel")
+    gamma = params.get("gamma")
+    degree = params.get("degree", 3) if kernel == "poly" else 3
+    class_weight = params.get("class_weight")
+    use_feature_selection = params.get("use_feature_selection", False)
+    feature_selection_method = params.get("feature_selection_method", None)
+    k_best = params.get("k_best", 50)
+    n_components = params.get("n_components", 0.9)
+    use_tfidf_weighting = params.get("use_tfidf_weighting", True)
+    
+    # Create feature pipeline
+    feature_pipeline = []
+    
+    # Add text features
+    feature_pipeline.append(
+        ('text_features', Pipeline([
+            ('glove', GloveVectorizer(use_tfidf_weighting=use_tfidf_weighting))
+        ]))
+    )
+    
+    # Add custom features
+    feature_pipeline.append(
+        ('custom_features', FeatureExtractor())
+    )
+    
+    # Create main pipeline
+    pipeline_steps = [
+        ('features', FeatureUnion(feature_pipeline)),
+        ('scaler', StandardScaler())
+    ]
+    
+    # Add feature selection if enabled
+    if use_feature_selection:
+        if feature_selection_method == "kbest":
+            pipeline_steps.append(('feature_selection', SelectKBest(f_classif, k=k_best)))
+        elif feature_selection_method == "model_based":
+            pipeline_steps.append(('feature_selection', SelectFromModel(
+                RandomForestClassifier(n_estimators=100, random_state=42)
+            )))
+        elif feature_selection_method == "pca":
+            pipeline_steps.append(('feature_selection', PCA(n_components=n_components)))
+    
+    # Add SVM classifier
+    pipeline_steps.append(('svm', SVC(
+        C=C,
+        kernel=kernel,
+        gamma=gamma,
+        degree=degree,
+        probability=True,
+        class_weight=class_weight,
+        random_state=42
+    )))
+    
+    # Create the pipeline with logging capabilities
+    return LoggingPipeline(pipeline_steps, logger=logger)
+
+# if __name__ == "__main__":
+#     main()
