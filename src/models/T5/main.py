@@ -1,3 +1,8 @@
+"""
+This Script was a test to see if the T5 model would work for the task.
+It was not used in the final model.
+"""
+
 import logging
 import os
 import pandas as pd
