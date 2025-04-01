@@ -68,7 +68,7 @@ class SynonymReplacer:
         self.batch_size = params.get("batch_size", 1000)
 
         self.add_original_evidence_to_results = params.get("add_original_evidence_to_results", True)
-        self.results_file_name = params.get("results_file_name", config.DATA_DIR / "synonym_replacement_results.csv")
+        self.results_file_name = params.get("output_file", config.DATA_DIR / "synonym_replacement_results.csv")
 
         # Store original DataFrame and create POS tags
         self.train_df = train_df
