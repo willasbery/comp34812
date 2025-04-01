@@ -1,5 +1,6 @@
 """
 Basic DeBERTa model for evidence detection with peft training to allow for larger model sizes.
+Uses EFL to augment the training data.
 """
 
 import logging
@@ -64,27 +65,53 @@ def get_device() -> torch.device:
         return torch.device('mps')
     return torch.device('cpu')
 
-def preprocess_function(examples, tokenizer):
-    """Process examples for BERT/DeBERTa classification."""
-    # Combine claim and evidence
-    inputs = []
-
-    # Create inputs and targets
-    for claim, evidence in zip(examples['Claim'], examples['Evidence']):
-        formatted_input = f"Claim: {claim}\n\nEvidence: {evidence}"
-        inputs.append(formatted_input)        
+def preprocess_dataframe(df):
+    """Preprocess dataframe by creating augmented text examples with labels."""
+    """
+        THIS DOES NOT WORK:
+        the reason it doesn't work is because the two similar inputs lead to two different labels
+        this means that the model will get confused and not know what to do
+    """
+    texts = []
+    labels = []
     
-    # Tokenize inputs
-    model_inputs = tokenizer(
-        inputs,
+    # Create inputs and targets
+    for _, row in df.iterrows():
+        claim = row['Claim']
+        evidence = row['Evidence']
+        label = row['label']
+        label_mapping = {
+            1: ("Supporting", 1, "Non-Supporting", 0),
+            0: ("Non-Supporting", 1, "Supporting", 0)
+        }
+        
+        claim_label, label_1, claim_label_2, label_2 = label_mapping[label]
+        
+        formatted_input = f"Claim: {claim}\n\nEvidence: {evidence}\n\nLabel: {claim_label}"
+        texts.append(formatted_input)
+        labels.append(label_1)
+        
+        formatted_input_2 = f"Claim: {claim}\n\nEvidence: {evidence}\n\nLabel: {claim_label_2}"
+        texts.append(formatted_input_2)
+        labels.append(label_2)
+        
+    # Create new dataframe with processed text and labels
+    processed_df = pd.DataFrame({'text': texts, 'labels': labels})
+    return processed_df
+
+def tokenize_function(examples, tokenizer):
+    """Tokenize preprocessed text examples."""
+    # Tokenize the text
+    tokenized = tokenizer(
+        examples['text'],
         max_length=MAX_SEQ_LENGTH,
         padding=False,
         truncation=True,
     )
     
-    # Add labels (binary classification)
-    model_inputs["labels"] = examples['label']
-    return model_inputs
+    # Add labels to the tokenized output
+    tokenized['labels'] = examples['labels']
+    return tokenized
 
 def convert_to_hf_dataset(dataframe):
     """Convert pandas dataframe to HuggingFace dataset format."""
@@ -105,17 +132,21 @@ def load_data(tokenizer):
         logging.error(f"Error loading or concatenating augmented training data: {e}")
         raise
     
+    # Preprocess dataframes
+    train_df = preprocess_dataframe(train_df)
+    dev_df = preprocess_dataframe(dev_df)
+    
     print(f"Training data shape: {train_df.shape}")
     print(f"Development data shape: {dev_df.shape}")
     
     # Check and report class distribution
-    train_positive = (train_df['label'] == 1).sum()
-    train_negative = (train_df['label'] == 0).sum()
-    dev_positive = (dev_df['label'] == 1).sum()
-    dev_negative = (dev_df['label'] == 0).sum()
+    train_positive = (train_df['labels'] == 1).sum()
+    train_negative = (train_df['labels'] == 0).sum()
+    dev_positive = (dev_df['labels'] == 1).sum()
+    dev_negative = (dev_df['labels'] == 0).sum()
     
     print(f"Training data distribution: Positive: {train_positive} ({train_positive/len(train_df)*100:.1f}%), "
-                 f"Negative: {train_negative} ({train_negative/len(train_df)*100:.1f}%)")
+          f"Negative: {train_negative} ({train_negative/len(train_df)*100:.1f}%)")
     print(f"Dev data distribution: Positive: {dev_positive} ({dev_positive/len(dev_df)*100:.1f}%), "
                  f"Negative: {dev_negative} ({dev_negative/len(dev_df)*100:.1f}%)")
     
@@ -125,17 +156,17 @@ def load_data(tokenizer):
     
     # Apply preprocessing (tokenization)
     train_dataset = train_dataset.map(
-        lambda examples: preprocess_function(examples, tokenizer),
+        lambda examples: tokenize_function(examples, tokenizer),
         batched=True,
         batch_size=1000,
-        remove_columns=['Claim', 'Evidence', 'label']
-    )
+        remove_columns=['text']  # Only remove the text column, keep labels
+    )   
     
     dev_dataset = dev_dataset.map(
-        lambda examples: preprocess_function(examples, tokenizer),
+        lambda examples: tokenize_function(examples, tokenizer),
         batched=True,
         batch_size=1000,
-        remove_columns=['Claim', 'Evidence', 'label']
+        remove_columns=['text']  # Only remove the text column, keep labels
     )
     
     # Set format for pytorch
