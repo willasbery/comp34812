@@ -69,7 +69,7 @@ class AdvancedSynonymReplacer:
         self.replacement_fraction = params.get("replacement_fraction", 0.5)
         self.batch_size = params.get("batch_size", 1000)
         self.add_original_evidence_to_results = params.get("add_original_evidence_to_results", True)
-        self.results_file_name = params.get("results_file_name", config.DATA_DIR / "advanced_synonym_replacement_results.csv")
+        self.results_file_name = params.get("output_file", config.DATA_DIR / "advanced_synonym_replacement_results.csv")
         self.min_word_length = params.get("min_word_length", 4)
         self.synonym_selection_strategy = params.get("synonym_selection_strategy", "random")  # 'random' or 'frequent'
         self.allow_multi_word_synonyms = params.get("allow_multi_word_synonyms", False)
