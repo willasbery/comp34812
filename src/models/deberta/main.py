@@ -2,7 +2,6 @@ import logging
 import os
 import pandas as pd
 import torch
-import optuna
 from pathlib import Path
 from transformers import (
     AutoTokenizer,
@@ -10,9 +9,6 @@ from transformers import (
     TrainingArguments,
     Trainer,
     EarlyStoppingCallback,
-    AutoConfig,
-    PreTrainedModel,
-    PreTrainedTokenizer,
     DataCollatorWithPadding
 )
 from peft import get_peft_model, LoraConfig, TaskType
@@ -21,9 +17,7 @@ from sklearn.metrics import (
     precision_recall_fscore_support,
     matthews_corrcoef
 )
-from torch.utils.data import Dataset
-from datasets import Dataset as HFDataset, load_dataset
-from typing import Dict, List, Tuple
+from datasets import Dataset as HFDataset
 
 # Configure logging
 logging.basicConfig(
