@@ -1,0 +1,18 @@
+{
+    "output_file": "C:\\Users\\willi\\Desktop\\Uni\\3rd_year\\NLU\\comp38412-not-broken\\data\\synonym_replacement_all_MiniLM_l6_v2.csv",
+    "min_sentence_similarity": 0.8,
+    "replacement_fraction": 0.5,
+    "sentence_transformer_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "add_original_evidence_to_results": true,
+    "batch_size": 1000,
+    "min_word_length": 4,
+    "synonym_selection_strategy": "random",
+    "allow_multi_word_synonyms": true,
+    "word_frequency_threshold": 5,
+    "enable_random_insertion": true,
+    "insertion_probability": 0.075,
+    "enable_random_deletion": true,
+    "deletion_probability": 0.075,
+    "date_generated": "2025-04-01T16:29:28.234029",
+    "synonym_source": "WordNet"
+}
