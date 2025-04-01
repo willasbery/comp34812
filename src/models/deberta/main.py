@@ -6,6 +6,8 @@ import logging
 import os
 import pandas as pd
 import torch
+import numpy as np
+import matplotlib.pyplot as plt
 from pathlib import Path
 from transformers import (
     AutoTokenizer,
@@ -19,9 +21,13 @@ from peft import get_peft_model, LoraConfig, TaskType
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
-    matthews_corrcoef
+    matthews_corrcoef,
+    confusion_matrix,
 )
 from datasets import Dataset as HFDataset
+from torch.optim import AdamW
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 # Configure logging
 logging.basicConfig(
@@ -50,8 +56,10 @@ WEIGHT_DECAY = 0.01
 WARMUP_RATIO = 0.1
 DROPOUT_RATE = 0.11
 MAX_SEQ_LENGTH = 384
-BASE_MODEL = 'microsoft/deberta-v2-xlarge-mnli'
+# BASE_MODEL = 'microsoft/deberta-v2-xlarge-mnli'
 
+BASE_MODEL = 'microsoft/deberta-v3-large'  # Upgraded model
+GRADIENT_ACCUMULATION_STEPS = 4  # Higher gradient accumulation
 
 # Optuna parameters
 N_TRIALS = 10
@@ -181,6 +189,35 @@ def compute_metrics(eval_pred):
     
     return metrics
 
+def plot_confusion_matrix(y_true, y_pred, save_path):
+    """Plot and save confusion matrix."""
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(8, 6))
+    plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    plt.title('Confusion Matrix')
+    plt.colorbar()
+    
+    classes = ['Negative', 'Positive']
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+    
+    # Normalize confusion matrix
+    cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    
+    # Add text annotations
+    thresh = cm.max() / 2.
+    for i, j in np.ndindex(cm.shape):
+        plt.text(j, i, f'{cm[i, j]}\n({cm_norm[i, j]:.2f})',
+                horizontalalignment="center",
+                color="white" if cm[i, j] > thresh else "black")
+    
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.savefig(save_path)
+    plt.close()
+
 def train_model(
     model,
     train_dataset,
@@ -219,8 +256,160 @@ def train_model(
     )
     
     trainer.train()
+    
+    # Evaluate on dev set and plot confusion matrix
+    eval_results = trainer.evaluate()
+    dev_preds = trainer.predict(eval_dataset)
+    y_true = dev_preds.label_ids
+    y_pred = dev_preds.predictions.argmax(axis=1)
+
+    # Save predictions to a CSV file
+    predictions_df = pd.DataFrame({'prediction': y_pred})
+    predictions_csv_path = os.path.join(output_dir, "predictions.csv")
+    predictions_df.to_csv(predictions_csv_path, index=False)
+    logging.info(f"Predictions saved to {predictions_csv_path}")
+    
+    # Plot and save confusion matrix
+    cm_save_path = os.path.join(output_dir, "confusion_matrix.png")
+    plot_confusion_matrix(y_true, y_pred, cm_save_path)
+    
     trainer.save_model()
     logging.info(f"Model saved to {output_dir}")
+    
+    return eval_results
+
+def find_learning_rate(model, train_dataset, tokenizer, device, batch_size=8, num_iter=100, 
+                      start_lr=1e-7, end_lr=1):
+    """
+    Runs a learning rate finder to determine the optimal learning rate.
+    
+    Args:
+        model: The model to train
+        train_dataset: HuggingFace dataset for training
+        tokenizer: Tokenizer for creating batches
+        device: Device to run on (cuda/mps/cpu)
+        batch_size: Batch size for training
+        num_iter: Number of iterations to run
+        start_lr: Starting learning rate
+        end_lr: Ending learning rate
+    
+    Returns:
+        Suggested learning rate
+    """
+    logging.info("Running learning rate finder...")
+    
+    # Create dataloader
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding='longest')
+    dataloader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size,
+        collate_fn=data_collator,
+        shuffle=True
+    )
+    
+    # Setup optimizer with very low learning rate
+    optimizer = AdamW(model.parameters(), lr=start_lr)
+    
+    # Calculate learning rate multiplier
+    lr_multiplier = (end_lr / start_lr) ** (1 / num_iter)
+    
+    # Storage for learning rates and losses
+    learning_rates = []
+    losses = []
+    
+    # Get initial loss
+    model.train()
+    
+    # Main loop
+    smoothed_loss = None
+    best_loss = float('inf')
+    best_lr = start_lr
+    
+    # Get an iterator of the dataloader that cycles
+    dataloader_iter = iter(dataloader)
+    
+    pbar = tqdm(range(num_iter))
+    for iteration in pbar:
+        # Get batch (with cycling)
+        try:
+            batch = next(dataloader_iter)
+        except StopIteration:
+            dataloader_iter = iter(dataloader)
+            batch = next(dataloader_iter)
+        
+        # Move batch to device
+        batch = {k: v.to(device) for k, v in batch.items()}
+        
+        # Clear gradients
+        optimizer.zero_grad()
+        
+        # Forward pass
+        outputs = model(**batch)
+        loss = outputs.loss
+        
+        # Backward pass
+        loss.backward()
+        
+        # Record learning rate and loss
+        current_lr = optimizer.param_groups[0]['lr']
+        learning_rates.append(current_lr)
+        
+        # Update smoothed loss
+        if smoothed_loss is None:
+            smoothed_loss = loss.item()
+        else:
+            smoothed_loss = 0.9 * smoothed_loss + 0.1 * loss.item()
+        
+        losses.append(smoothed_loss)
+        
+        # Update progress bar
+        pbar.set_description(f"LR: {current_lr:.2e}, Loss: {smoothed_loss:.4f}")
+        
+        # Check if loss is getting better
+        if smoothed_loss < best_loss and iteration > 10:  # Skip the first few iterations
+            best_loss = smoothed_loss
+            best_lr = current_lr
+        
+        # Check for divergence (stop if loss is exploding)
+        if smoothed_loss > 4 * best_loss or torch.isnan(loss).item():
+            logging.info(f"Loss diverging, stopping early at lr={current_lr:.2e}")
+            break
+        
+        # Step optimizer
+        optimizer.step()
+        
+        # Increase learning rate
+        for param_group in optimizer.param_groups:
+            param_group['lr'] *= lr_multiplier
+    
+    # Plot results
+    plt.figure(figsize=(10, 6))
+    plt.plot(learning_rates, losses)
+    plt.xscale('log')
+    plt.xlabel('Learning Rate')
+    plt.ylabel('Loss')
+    plt.title('Learning Rate Finder')
+    
+    # Find the suggested learning rate (where loss is lowest)
+    suggested_lr = learning_rates[np.argmin(losses[10:])+10] if len(losses) > 10 else best_lr
+    
+    # Mark the suggested learning rate
+    plt.axvline(x=suggested_lr, color='r', linestyle='--', 
+                label=f'Suggested LR: {suggested_lr:.2e}')
+    plt.legend()
+    
+    # Save the plot
+    os.makedirs(str(SAVE_DIR), exist_ok=True)
+    plt.savefig(os.path.join(SAVE_DIR, 'lr_finder.png'))
+    plt.close()
+    
+    logging.info(f"Learning rate finder suggests: {suggested_lr:.2e}")
+    
+    # Reset the model and optimizer
+    for param in model.parameters():
+        param.grad = None
+    
+    return suggested_lr
 
 def main():
     """Main execution function."""
@@ -233,9 +422,10 @@ def main():
     peft_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
         inference_mode=False,
-        r=8,
-        lora_alpha=16,
-        lora_dropout=0.1
+        r=16,  # Increased rank
+        lora_alpha=32,  # Higher scale
+        lora_dropout=0.1,
+        target_modules=["query_proj", "key_proj", "value_proj", "dense"],  # Target both attention and FFN
     )
 
     # Initialize tokenizer and model
@@ -247,17 +437,33 @@ def main():
         attention_probs_dropout_prob=DROPOUT_RATE,
         ignore_mismatched_sizes=True,
     )
+
+    
     model = get_peft_model(model, peft_config)
     model.to(device)
 
     # Load data
     train_dataset, dev_dataset, dev_df = load_data(tokenizer)
     
+    # Run learning rate finder to find optimal learning rate
+    FIND_LR = True  # Set to False to skip LR finder
+    if FIND_LR:
+        suggested_lr = find_learning_rate(
+            model=model,
+            train_dataset=train_dataset,
+            tokenizer=tokenizer,
+            device=device,
+            batch_size=BATCH_SIZE,
+            num_iter=100
+        )
+    else:
+        suggested_lr = LEARNING_RATE
+    
     # Training parameters with focus on preventing overfitting
     training_params = {
         'per_device_train_batch_size': BATCH_SIZE,
         'per_device_eval_batch_size': BATCH_SIZE,
-        'learning_rate': LEARNING_RATE,
+        'learning_rate': suggested_lr,  # Use the suggested learning rate from LR finder
         'weight_decay': WEIGHT_DECAY,
         'num_train_epochs': NUM_EPOCHS,
         'warmup_ratio': WARMUP_RATIO,
@@ -269,21 +475,23 @@ def main():
         'save_total_limit': 5,
         'load_best_model_at_end': True,
         'metric_for_best_model': 'MCC',
-        'gradient_accumulation_steps': 1,
-        'fp16': torch.cuda.is_available(),
+        'gradient_accumulation_steps': GRADIENT_ACCUMULATION_STEPS,
+        'fp16': device.type == 'cuda',  # Enable fp16 only for CUDA
+        'bf16': device.type == 'cuda' and torch.cuda.get_device_capability()[0] >= 8,
         'optim': 'adamw_torch',
         'logging_steps': 100,
         'logging_first_step': True,
         'group_by_length': True,
         'seed': 42,
         'dataloader_num_workers': 4,
-        'label_smoothing_factor': 0.05,
+        'label_smoothing_factor': 0.1,  # Increased for better regularization
         'max_grad_norm': 1.0,
+        'gradient_checkpointing': True,  # Enable gradient checkpointing
     }
     
-    # Train with default parameters
+    # Train with optimized parameters
     model_save_path = SAVE_DIR / BASE_MODEL.split('/')[-1]
-    train_model(
+    eval_results = train_model(
         model,
         train_dataset,
         dev_dataset,
@@ -291,6 +499,8 @@ def main():
         tokenizer,
         **training_params
     )
+    
+    print(f"Final evaluation results: {eval_results}")
 
 if __name__ == "__main__":
     main()
