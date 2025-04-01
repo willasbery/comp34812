@@ -67,7 +67,6 @@ def preprocess_function(examples, tokenizer):
 
     # Create inputs and targets
     for claim, evidence in zip(examples['Claim'], examples['Evidence']):
-        # Simplify the instruction and make it more direct
         formatted_input = f"Claim: {claim}\n\nEvidence: {evidence}"
         inputs.append(formatted_input)        
     
