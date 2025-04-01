@@ -474,7 +474,3 @@ def main():
     # Perform augmentation
     synonym_replacer = SynonymReplacer(params, train_df)
     synonym_replacer.augment_data()
-
-
-if __name__ == '__main__':
-    main()
