@@ -13,38 +13,17 @@ from tqdm import tqdm
 from sentence_transformers import SentenceTransformer, util
 from nltk.corpus import wordnet, stopwords
 
+from src.config import config
+from src.utils.utils import get_device
+from src.augmentation.synonym_replacement.utils import remove_stopwords
+
 import warnings
 warnings.filterwarnings('ignore')
 
-# Ensure you have these downloads available
 nltk.download('averaged_perceptron_tagger_eng')
 nltk.download('wordnet')
 nltk.download('omw-1.4')
 nltk.download('stopwords')
-
-# Import config and utility
-try:
-    from src.config import config
-    from src.utils.utils import get_device
-    from src.augmentation.synonym_replacement.utils import remove_stopwords
-except ImportError:
-    # Handle cases where src might not be in the PYTHONPATH
-    class MockConfig:
-        DATA_DIR = Path("./data")
-        TRAIN_FILE = Path("./data/train.csv")  # Replace with your actual path if needed
-    config = MockConfig()
-
-    def get_device():
-        # Mock get_device function if src is not available
-        import torch
-        return "cuda" if torch.cuda.is_available() else "cpu"
-
-    def remove_stopwords(text):
-        # Mock remove_stopwords function if src is not available
-        stop_words = set(stopwords.words('english'))
-        words = text.lower().split()
-        return " ".join([w for w in words if w not in stop_words])
-
 
 # Configure logging
 logging.basicConfig(
@@ -52,6 +31,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S',
     level=logging.INFO
 )
+
 
 class AdvancedSynonymReplacer:
     """
@@ -100,13 +80,13 @@ class AdvancedSynonymReplacer:
         self.deletion_probability = params.get("deletion_probability", 0.05)
 
         # Store original DataFrame and create POS tags
-        self.train_df = train_df.copy() # Avoid modifying the original DataFrame
+        self.train_df = train_df.copy()
         self._prepare_data()
 
-        # Log parameter summary
         logging.info("Starting advanced data augmentation with the following parameters:")
         for key, value in params.items():
             logging.info(f" - {key}: {value}")
+
 
     def _prepare_data(self):
         """Prepares the data by adding POS tags and calculating word frequencies."""
@@ -126,6 +106,7 @@ class AdvancedSynonymReplacer:
             all_words.extend(nltk.word_tokenize(text.lower()))
         self.word_frequencies = Counter(all_words)
 
+
     def calculate_sentence_similarity(self, sentence_1: str, sentence_2: str) -> float:
         """
         Calculate semantic similarity between two sentences using Sentence Transformers.
@@ -141,6 +122,7 @@ class AdvancedSynonymReplacer:
         cosine_scores = util.cos_sim(embeddings[0], embeddings[1])
         return cosine_scores.item()
 
+
     def _get_wordnet_pos(self, tag):
         """Map NLTK POS tags to WordNet POS tags."""
         if tag.startswith('J'):
@@ -154,11 +136,12 @@ class AdvancedSynonymReplacer:
         else:
             return None
 
+
     def _process_text(
         self,
         text_tokens: list[str],
         pos_tags: list[tuple[str, str]],
-        claim_words: set = None, # Optional claim words for filtering
+        claim_words: set = None,
         is_claim: bool = False
     ) -> list[str]:
         """
@@ -215,6 +198,7 @@ class AdvancedSynonymReplacer:
 
         return potential_replacements
 
+
     def get_synonyms(self, word: str, pos_tag: str = None, topn: int = 10) -> list[str]:
         """
         Retrieve synonyms for a given word using the NLTK WordNet corpus.
@@ -257,6 +241,7 @@ class AdvancedSynonymReplacer:
             random.shuffle(synonym_list)
 
         return synonym_list[:topn]
+
 
     def find_valid_replacements(
         self,
@@ -314,6 +299,7 @@ class AdvancedSynonymReplacer:
 
         return False, ""
 
+
     def _random_insertion(self, tokens: list[str], pos_tags: list[tuple[str, str]]) -> list[str]:
         """Randomly insert synonyms into the text."""
         augmented_tokens = list(tokens)
@@ -340,6 +326,7 @@ class AdvancedSynonymReplacer:
                     
         return augmented_tokens
 
+
     def _random_deletion(self, tokens: list[str]) -> list[str]:
         """Randomly delete words from the text."""
         if not tokens:
@@ -351,6 +338,7 @@ class AdvancedSynonymReplacer:
         augmented_tokens = [token for i, token in enumerate(augmented_tokens) if i not in indices_to_delete]
         
         return augmented_tokens
+
 
     def augment_data(self):
         """
