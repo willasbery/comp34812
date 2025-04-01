@@ -386,14 +386,6 @@ class AdvancedSynonymReplacer:
                 evidence_pos_tags_dict[word.lower()].append(tag)
             evidence_tokens = nltk.word_tokenize(original_evidence_text)
 
-            # POS tagging for claim (if applicable)
-            claim_pos_tags_dict = {}
-            claim_tokens = nltk.word_tokenize(original_claim_text)
-            if self.apply_to_claim and self.original_claims_pos[idx] is not None:
-                claim_pos_tags = self.original_claims_pos[idx]
-                for word, tag in claim_pos_tags:
-                    claim_pos_tags_dict[word.lower()].append(tag)
-
             # Augment Evidence
             augmented_evidence_tokens = list(evidence_tokens)
             if self.enable_random_insertion:
@@ -404,7 +396,7 @@ class AdvancedSynonymReplacer:
             potential_evidence_replacements = self._process_text(
                 augmented_evidence_tokens,
                 evidence_pos_tags,
-                claim_words=set(nltk.word_tokenize(self.preprocessed_claims[idx])) if self.apply_to_claim else set()
+                claim_words=set()
             )
 
             num_evidence_replacements = max(0, int(len(potential_evidence_replacements) * self.replacement_fraction))
