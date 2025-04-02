@@ -54,7 +54,7 @@ SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Training parameters
 BATCH_SIZE = 8
-NUM_EPOCHS = 10
+NUM_EPOCHS = 3
 LEARNING_RATE = 5e-5
 WEIGHT_DECAY = 0.01
 WARMUP_RATIO = 0.1
@@ -64,15 +64,15 @@ MAX_SEQ_LENGTH = 384
 BASE_MODEL = 'microsoft/deberta-v2-xlarge-mnli'
 
 # Optuna parameters
-N_TRIALS = 10
+N_TRIALS = 6
 
 # Hyperparameter search space
 BATCH_SIZES = [4, 8, 16]
-LEARNING_RATES = [5e-4, 1e-4, 5e-5, 1e-5, 5e-6]
+LEARNING_RATES = [5e-5, 1e-5, 5e-6]
 WEIGHT_DECAYS = [0.1, 0.01, 0.001]
 WARMUP_RATIOS = [0.05, 0.1, 0.15]
 DROPOUT_RATES = [0, 0.05, 0.1, 0.15]
-MAX_SEQ_LENGTHS = [128, 256, 512]
+MAX_SEQ_LENGTHS = [256, 384, 512]
 
 def get_device() -> torch.device:
     """Determine the device to use for computations."""
@@ -142,6 +142,10 @@ def load_data(tokenizer, max_seq_length):
     print(f"Dev data distribution: Positive: {dev_positive} ({dev_positive/len(dev_df)*100:.1f}%), "
                  f"Negative: {dev_negative} ({dev_negative/len(dev_df)*100:.1f}%)")
     
+    # Add a sequential index to keep track of original order (if not already present)
+    if 'original_index' not in dev_df.columns:
+        dev_df['original_index'] = list(range(len(dev_df)))
+    
     # Convert to HuggingFace datasets
     train_dataset = convert_to_hf_dataset(train_df)
     dev_dataset = convert_to_hf_dataset(dev_df)
@@ -154,11 +158,13 @@ def load_data(tokenizer, max_seq_length):
         remove_columns=['Claim', 'Evidence', 'label']
     )
     
+    # For dev dataset, keep track of original indices but remove other columns
+    columns_to_remove = [col for col in dev_df.columns if col not in ['original_index']]
     dev_dataset = dev_dataset.map(
         lambda examples: preprocess_function(examples, tokenizer, max_seq_length),
         batched=True,
         batch_size=1000,
-        remove_columns=['Claim', 'Evidence', 'label']
+        remove_columns=columns_to_remove
     )
     
     # Set format for pytorch
@@ -278,11 +284,44 @@ def train_model(
     y_true = dev_preds.label_ids
     y_pred = dev_preds.predictions.argmax(axis=1)
 
-    # Save predictions to a CSV file
+    # Save predictions to a CSV file with original dev data for alignment
+    # First, load the original dev CSV to maintain alignment
+    dev_df = pd.read_csv(DEV_FILE)
+    
+    # Create a dataframe with predictions
     predictions_df = pd.DataFrame({'prediction': y_pred})
-    predictions_csv_path = os.path.join(output_dir, "predictions.csv")
-    predictions_df.to_csv(predictions_csv_path, index=False)
-    logging.info(f"Predictions saved to {predictions_csv_path}")
+
+    
+    
+    # Check if the evaluation dataset has original indices
+    if hasattr(eval_dataset, 'original_index') or 'original_index' in eval_dataset.features:
+        # Get original indices if present
+        try:
+            original_indices = [item['original_index'] for item in eval_dataset]
+            # Sort predictions by original index
+            predictions_df['original_index'] = original_indices
+            predictions_df = predictions_df.sort_values('original_index')
+            del predictions_df['original_index']  # Remove after sorting
+        except Exception as e:
+            logging.warning(f"Couldn't use original indices: {e}")
+    
+    # Ensure the predictions align with the original data
+    if len(dev_df) == len(predictions_df):
+        # Add predictions to the original dev dataframe
+        dev_df['prediction'] = predictions_df['prediction'].values
+        predictions_csv_path = os.path.join(output_dir, "predictions_with_data.csv")
+        dev_df.to_csv(predictions_csv_path, index=False)
+        print(f"Predictions with original data saved to {predictions_csv_path}")
+        
+        # Also save just the predictions for convenience
+        predictions_only_path = os.path.join(output_dir, "predictions.csv")
+        predictions_df.to_csv(predictions_only_path, index=False)
+    else:
+        print(f"Prediction count ({len(predictions_df)}) doesn't match dev data count ({len(dev_df)})")
+        # Save just the predictions
+        predictions_csv_path = os.path.join(output_dir, "predictions.csv")
+        predictions_df.to_csv(predictions_csv_path, index=False)
+        print(f"Predictions saved to {predictions_csv_path}")
     
     # Plot and save confusion matrix
     cm_save_path = os.path.join(output_dir, "confusion_matrix.png")
@@ -332,7 +371,7 @@ def objective(trial):
     model.to(device)
     
     # Load data with current max_seq_length
-    train_dataset, dev_dataset, _ = load_data(tokenizer, max_seq_length)
+    train_dataset, dev_dataset, dev_df = load_data(tokenizer, max_seq_length)
     
     # Training parameters
     training_params = {
@@ -390,10 +429,10 @@ def objective(trial):
             json.dump({**params, **eval_results}, f, indent=2)
         
         # Return Matthews Correlation Coefficient as the objective value
-        return eval_results["MCC"]
+        return eval_results["eval_MCC"]
     
     except Exception as e:
-        logging.error(f"Trial {trial.number} failed with error: {e}")
+        print(f"Trial {trial.number} failed with error: {e}")
         # Return very bad score for failed trials
         return -1.0
 
@@ -455,19 +494,19 @@ def run_optuna_experiment():
     
     # Plot optimization history
     fig = optuna.visualization.plot_optimization_history(study)
-    fig.write_image(str(study_dir / "optimization_history.png"))
+    fig.write_html(str(study_dir / "optimization_history.html"))
     
     # Plot parameter importance
     fig = optuna.visualization.plot_param_importances(study)
-    fig.write_image(str(study_dir / "param_importances.png"))
+    fig.write_html(str(study_dir / "param_importances.html"))
     
     # Plot parameter relationships
     fig = optuna.visualization.plot_parallel_coordinate(study)
-    fig.write_image(str(study_dir / "parallel_coordinate.png"))
+    fig.write_html(str(study_dir / "parallel_coordinate.html"))
     
     # Plot high-dimensional parameter relationships
     fig = optuna.visualization.plot_contour(study)
-    fig.write_image(str(study_dir / "contour.png"))
+    fig.write_html(str(study_dir / "contour.html"))
     
     return best_params
 
