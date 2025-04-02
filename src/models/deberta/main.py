@@ -1,7 +1,6 @@
 """
 Basic DeBERTa model for evidence detection with peft training to allow for larger model sizes.
 """
-
 import logging
 import os
 import pandas as pd
@@ -39,11 +38,13 @@ logging.basicConfig(
 # Disable wandb
 os.environ['WANDB_DISABLED'] = 'true'
 
+
 # Path configuration
 DATA_DIR = Path(__file__).parent.parent / "data"
 TRAIN_FILE = DATA_DIR / "train.csv"
 DEV_FILE = DATA_DIR / "dev.csv"
 AUG_TRAIN_FILE = DATA_DIR / "train_augmented.csv"
+ANOTHER_AUG_FILE = DATA_DIR / "positive_examples.csv"
 AUG_TRAIN_HIGH_REPLACEMENT_FILE = DATA_DIR / "train_augmented_high_replacement_fraction.csv"
 SAVE_DIR = DATA_DIR / "results" / "transformer"
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -56,10 +57,8 @@ WEIGHT_DECAY = 0.01
 WARMUP_RATIO = 0.1
 DROPOUT_RATE = 0.11
 MAX_SEQ_LENGTH = 384
-# BASE_MODEL = 'microsoft/deberta-v2-xlarge-mnli'
-
-BASE_MODEL = 'microsoft/deberta-v3-large'  # Upgraded model
-GRADIENT_ACCUMULATION_STEPS = 4  # Higher gradient accumulation
+# BASE_MODEL = 'cross-encoder/nli-deberta-v3-large'
+BASE_MODEL = 'microsoft/deberta-v2-xlarge-mnli'
 
 # Optuna parameters
 N_TRIALS = 10
@@ -75,16 +74,20 @@ def get_device() -> torch.device:
 def preprocess_function(examples, tokenizer):
     """Process examples for BERT/DeBERTa classification."""
     # Combine claim and evidence
-    inputs = []
+    claims = []
+    evidences = []
 
     # Create inputs and targets
     for claim, evidence in zip(examples['Claim'], examples['Evidence']):
-        formatted_input = f"Claim: {claim}\n\nEvidence: {evidence}"
-        inputs.append(formatted_input)        
+        formatted_claim = f"Claim: {claim}"
+        formatted_evidence = f"Evidence: {evidence}"
+        claims.append(formatted_claim)
+        evidences.append(formatted_evidence)
     
     # Tokenize inputs
     model_inputs = tokenizer(
-        inputs,
+        claims,
+        evidences,
         max_length=MAX_SEQ_LENGTH,
         padding=False,
         truncation=True,
@@ -108,7 +111,8 @@ def load_data(tokenizer):
 
     try:
         train_augmented_df = pd.read_csv(AUG_TRAIN_FILE)
-        train_df = pd.concat([train_df, train_augmented_df])
+        another_aug_df = pd.read_csv(ANOTHER_AUG_FILE)
+        train_df = pd.concat([train_df, train_augmented_df, another_aug_df])
     except Exception as e:
         logging.error(f"Error loading or concatenating augmented training data: {e}")
         raise
@@ -278,139 +282,6 @@ def train_model(
     
     return eval_results
 
-def find_learning_rate(model, train_dataset, tokenizer, device, batch_size=8, num_iter=100, 
-                      start_lr=1e-7, end_lr=1):
-    """
-    Runs a learning rate finder to determine the optimal learning rate.
-    
-    Args:
-        model: The model to train
-        train_dataset: HuggingFace dataset for training
-        tokenizer: Tokenizer for creating batches
-        device: Device to run on (cuda/mps/cpu)
-        batch_size: Batch size for training
-        num_iter: Number of iterations to run
-        start_lr: Starting learning rate
-        end_lr: Ending learning rate
-    
-    Returns:
-        Suggested learning rate
-    """
-    logging.info("Running learning rate finder...")
-    
-    # Create dataloader
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding='longest')
-    dataloader = DataLoader(
-        train_dataset, 
-        batch_size=batch_size,
-        collate_fn=data_collator,
-        shuffle=True
-    )
-    
-    # Setup optimizer with very low learning rate
-    optimizer = AdamW(model.parameters(), lr=start_lr)
-    
-    # Calculate learning rate multiplier
-    lr_multiplier = (end_lr / start_lr) ** (1 / num_iter)
-    
-    # Storage for learning rates and losses
-    learning_rates = []
-    losses = []
-    
-    # Get initial loss
-    model.train()
-    
-    # Main loop
-    smoothed_loss = None
-    best_loss = float('inf')
-    best_lr = start_lr
-    
-    # Get an iterator of the dataloader that cycles
-    dataloader_iter = iter(dataloader)
-    
-    pbar = tqdm(range(num_iter))
-    for iteration in pbar:
-        # Get batch (with cycling)
-        try:
-            batch = next(dataloader_iter)
-        except StopIteration:
-            dataloader_iter = iter(dataloader)
-            batch = next(dataloader_iter)
-        
-        # Move batch to device
-        batch = {k: v.to(device) for k, v in batch.items()}
-        
-        # Clear gradients
-        optimizer.zero_grad()
-        
-        # Forward pass
-        outputs = model(**batch)
-        loss = outputs.loss
-        
-        # Backward pass
-        loss.backward()
-        
-        # Record learning rate and loss
-        current_lr = optimizer.param_groups[0]['lr']
-        learning_rates.append(current_lr)
-        
-        # Update smoothed loss
-        if smoothed_loss is None:
-            smoothed_loss = loss.item()
-        else:
-            smoothed_loss = 0.9 * smoothed_loss + 0.1 * loss.item()
-        
-        losses.append(smoothed_loss)
-        
-        # Update progress bar
-        pbar.set_description(f"LR: {current_lr:.2e}, Loss: {smoothed_loss:.4f}")
-        
-        # Check if loss is getting better
-        if smoothed_loss < best_loss and iteration > 10:  # Skip the first few iterations
-            best_loss = smoothed_loss
-            best_lr = current_lr
-        
-        # Check for divergence (stop if loss is exploding)
-        if smoothed_loss > 4 * best_loss or torch.isnan(loss).item():
-            logging.info(f"Loss diverging, stopping early at lr={current_lr:.2e}")
-            break
-        
-        # Step optimizer
-        optimizer.step()
-        
-        # Increase learning rate
-        for param_group in optimizer.param_groups:
-            param_group['lr'] *= lr_multiplier
-    
-    # Plot results
-    plt.figure(figsize=(10, 6))
-    plt.plot(learning_rates, losses)
-    plt.xscale('log')
-    plt.xlabel('Learning Rate')
-    plt.ylabel('Loss')
-    plt.title('Learning Rate Finder')
-    
-    # Find the suggested learning rate (where loss is lowest)
-    suggested_lr = learning_rates[np.argmin(losses[10:])+10] if len(losses) > 10 else best_lr
-    
-    # Mark the suggested learning rate
-    plt.axvline(x=suggested_lr, color='r', linestyle='--', 
-                label=f'Suggested LR: {suggested_lr:.2e}')
-    plt.legend()
-    
-    # Save the plot
-    os.makedirs(str(SAVE_DIR), exist_ok=True)
-    plt.savefig(os.path.join(SAVE_DIR, 'lr_finder.png'))
-    plt.close()
-    
-    logging.info(f"Learning rate finder suggests: {suggested_lr:.2e}")
-    
-    # Reset the model and optimizer
-    for param in model.parameters():
-        param.grad = None
-    
-    return suggested_lr
-
 def main():
     """Main execution function."""
     device = get_device()
@@ -422,10 +293,9 @@ def main():
     peft_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
         inference_mode=False,
-        r=16,  # Increased rank
-        lora_alpha=32,  # Higher scale
+        r=8,
+        lora_alpha=16,
         lora_dropout=0.1,
-        target_modules=["query_proj", "key_proj", "value_proj", "dense"],  # Target both attention and FFN
     )
 
     # Initialize tokenizer and model
@@ -445,48 +315,32 @@ def main():
     # Load data
     train_dataset, dev_dataset, dev_df = load_data(tokenizer)
     
-    # Run learning rate finder to find optimal learning rate
-    FIND_LR = True  # Set to False to skip LR finder
-    if FIND_LR:
-        suggested_lr = find_learning_rate(
-            model=model,
-            train_dataset=train_dataset,
-            tokenizer=tokenizer,
-            device=device,
-            batch_size=BATCH_SIZE,
-            num_iter=100
-        )
-    else:
-        suggested_lr = LEARNING_RATE
-    
     # Training parameters with focus on preventing overfitting
     training_params = {
         'per_device_train_batch_size': BATCH_SIZE,
         'per_device_eval_batch_size': BATCH_SIZE,
-        'learning_rate': suggested_lr,  # Use the suggested learning rate from LR finder
+        'learning_rate': LEARNING_RATE,
         'weight_decay': WEIGHT_DECAY,
         'num_train_epochs': NUM_EPOCHS,
         'warmup_ratio': WARMUP_RATIO,
-        'lr_scheduler_type': 'cosine',
-        'evaluation_strategy': 'steps',
+        'lr_scheduler_type': 'cosine_with_restarts',
+        'eval_strategy': 'steps',
         'eval_steps': 500,
         'save_strategy': 'steps',
         'save_steps': 500,
         'save_total_limit': 5,
         'load_best_model_at_end': True,
         'metric_for_best_model': 'MCC',
-        'gradient_accumulation_steps': GRADIENT_ACCUMULATION_STEPS,
-        'fp16': device.type == 'cuda',  # Enable fp16 only for CUDA
-        'bf16': device.type == 'cuda' and torch.cuda.get_device_capability()[0] >= 8,
+        'fp16': device.type == 'cuda', 
         'optim': 'adamw_torch',
         'logging_steps': 100,
         'logging_first_step': True,
         'group_by_length': True,
         'seed': 42,
         'dataloader_num_workers': 4,
-        'label_smoothing_factor': 0.1,  # Increased for better regularization
+        'label_smoothing_factor': 0.05,
         'max_grad_norm': 1.0,
-        'gradient_checkpointing': True,  # Enable gradient checkpointing
+        'gradient_checkpointing': True,
     }
     
     # Train with optimized parameters
