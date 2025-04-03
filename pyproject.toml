@@ -20,4 +20,11 @@ dependencies = [
     "numpy==1.26.4",
     "scipy>=1.7.0",
     "tqdm>=4.67.1",
+    "peft>=0.15.1",
+    "transformers>=4.49.0",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
