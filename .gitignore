@@ -173,3 +173,5 @@ cython_debug/
 # Data
 data/training_data/
 cache/
+
+*.DS_Store
