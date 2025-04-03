@@ -1,1 +1,3 @@
-{"Accuracy": 0.7713466081673979, "Macro-P": 0.7130974213570435, "Macro-R": 0.7018921502794122, "Macro-F1": 0.7068867681573417, "W Macro-P": 0.7660257689876059, "W Macro-R": 0.7713466081673979, "W Macro-F1": 0.7682616284188057, "MCC": 0.4148382654325488, "C": 2.2772400952747716, "kernel": "sigmoid", "gamma": "auto", "max_features": 20000, "min_df": 4, "max_df": 0.8, "ngram_range": "1,1"}
+
+{"Accuracy": 0.7863651704353696, "Macro-P": 0.7328534020552565, "Macro-R": 0.7235679409990553, "Macro-F1": 0.7278414125937587, "W Macro-P": 0.7825348543828983, "W Macro-R": 0.7863651704353696, "W Macro-F1": 0.7841928912141745, "MCC": 0.4563268813125911, "C": 0.04812464417512225, "kernel": "rbf", "gamma": "auto", "use_feature_selection": false, "class_weight": null, "use_tfidf_weighting": false}
+
