@@ -114,7 +114,7 @@ def convert_to_hf_dataset(dataframe):
 
 def load_data(tokenizer, max_seq_length):
     """Load and prepare the training and development datasets."""
-    logging.info("Loading datasets...")
+    print("Loading datasets...")
     
     # Load CSV files into pandas dataframes
     train_df = pd.read_csv(TRAIN_FILE)
@@ -248,7 +248,7 @@ def train_model(
     **kwargs
 ):
     """Train the classification model."""
-    logging.info("Starting training...")
+    print("Starting training...")
     
     # Free up CUDA memory before training
     torch.cuda.empty_cache()
@@ -290,45 +290,16 @@ def train_model(
     
     # Create a dataframe with predictions
     predictions_df = pd.DataFrame({'prediction': y_pred})
-
-    
-    
-    # Check if the evaluation dataset has original indices
-    if hasattr(eval_dataset, 'original_index') or 'original_index' in eval_dataset.features:
-        # Get original indices if present
-        try:
-            original_indices = [item['original_index'] for item in eval_dataset]
-            # Sort predictions by original index
-            predictions_df['original_index'] = original_indices
-            predictions_df = predictions_df.sort_values('original_index')
-            del predictions_df['original_index']  # Remove after sorting
-        except Exception as e:
-            logging.warning(f"Couldn't use original indices: {e}")
-    
-    # Ensure the predictions align with the original data
-    if len(dev_df) == len(predictions_df):
-        # Add predictions to the original dev dataframe
-        dev_df['prediction'] = predictions_df['prediction'].values
-        predictions_csv_path = os.path.join(output_dir, "predictions_with_data.csv")
-        dev_df.to_csv(predictions_csv_path, index=False)
-        print(f"Predictions with original data saved to {predictions_csv_path}")
-        
-        # Also save just the predictions for convenience
-        predictions_only_path = os.path.join(output_dir, "predictions.csv")
-        predictions_df.to_csv(predictions_only_path, index=False)
-    else:
-        print(f"Prediction count ({len(predictions_df)}) doesn't match dev data count ({len(dev_df)})")
-        # Save just the predictions
-        predictions_csv_path = os.path.join(output_dir, "predictions.csv")
-        predictions_df.to_csv(predictions_csv_path, index=False)
-        print(f"Predictions saved to {predictions_csv_path}")
+    predictions_csv_path = os.path.join(output_dir, "predictions.csv")
+    predictions_df.to_csv(predictions_csv_path, index=False)
+    print(f"Predictions saved to {predictions_csv_path}")
     
     # Plot and save confusion matrix
     cm_save_path = os.path.join(output_dir, "confusion_matrix.png")
     plot_confusion_matrix(y_true, y_pred, cm_save_path)
     
     trainer.save_model()
-    logging.info(f"Model saved to {output_dir}")
+    print(f"Model saved to {output_dir}")
     
     return eval_results
 
@@ -343,7 +314,7 @@ def objective(trial):
     max_seq_length = trial.suggest_categorical("max_seq_length", MAX_SEQ_LENGTHS)
     
     device = get_device()
-    logging.info(f"Trial {trial.number}: Using device: {device}")
+    print(f"Trial {trial.number}: Using device: {device}")
     
     # Free GPU memory
     torch.cuda.empty_cache()
@@ -438,7 +409,7 @@ def objective(trial):
 
 def run_optuna_experiment():
     """Run Optuna hyperparameter optimization experiment."""
-    logging.info("Starting hyperparameter optimization with Optuna...")
+    print("Starting hyperparameter optimization with Optuna...")
     
     # Create output directory for study
     study_dir = SAVE_DIR / "optuna_study"
@@ -470,13 +441,13 @@ def run_optuna_experiment():
     best_trial = study.best_trial
     
     # Log additional information about the Bayesian optimization
-    logging.info(f"Using Bayesian optimization with TPE sampler")
-    logging.info(f"Best trial: {best_trial.number}")
-    logging.info(f"Best value: {best_trial.value}")
-    logging.info("Best hyperparameters:")
+    print(f"Using Bayesian optimization with TPE sampler")
+    print(f"Best trial: {best_trial.number}")
+    print(f"Best value: {best_trial.value}")
+    print("Best hyperparameters:")
     
     for param, value in best_trial.params.items():
-        logging.info(f"\t{param}: {value}")
+        print(f"\t{param}: {value}")
     
     # Save best parameters
     best_params = {
@@ -513,13 +484,13 @@ def run_optuna_experiment():
 def main():
     """Main execution function."""
     device = get_device()
-    logging.info(f"Using device: {device}")
+    print(f"Using device: {device}")
 
     # Run Optuna hyperparameter optimization
     best_params = run_optuna_experiment()
     
     # Optional: Train final model with best parameters
-    logging.info("Training final model with best parameters...")
+    print("Training final model with best parameters...")
     
     # Free GPU memory
     torch.cuda.empty_cache()
