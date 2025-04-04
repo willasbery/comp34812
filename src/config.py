@@ -32,6 +32,7 @@ class BaseConfig:
                 "replacement_fraction": 0.3,
                 "min_similarity": 0.85,
                 "min_word_length": 4,
+                "word_frequency_threshold": 1,
                 "split": {
                     "Claim": 0.15,
                     "Evidence": 0.7,

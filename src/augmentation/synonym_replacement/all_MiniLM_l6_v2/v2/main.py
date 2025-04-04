@@ -24,6 +24,7 @@ nltk.download('averaged_perceptron_tagger_eng')
 nltk.download('wordnet')
 nltk.download('omw-1.4')
 nltk.download('stopwords')
+nltk.download('punkt_tab')
 
 # Configure logging
 logging.basicConfig(
@@ -367,6 +368,7 @@ class AdvancedSynonymReplacer:
 
         successful_augmentations = 0
         attempted_augmentations = 0
+        total_words_augmented = 0  # Counter for the number of words augmented
 
         original_claims = self.train_df['Claim'].tolist()
         labels = self.train_df['label'].tolist()
@@ -427,6 +429,7 @@ class AdvancedSynonymReplacer:
                         try:
                             current_evidence = re.sub(pattern, replacement, current_evidence, flags=re.IGNORECASE)
                             final_word_replacement_map_evidence[word] = replacement
+                            total_words_augmented += 1  # Increment the counter for each successful replacement
                         except re.error:
                             logging.warning(f"Regex error applying replacement for '{word}' with '{replacement}'.")
                 augmented_evidence_text = current_evidence
@@ -471,6 +474,7 @@ class AdvancedSynonymReplacer:
         # Log final statistics
         logging.info(f"Augmentation completed. {successful_augmentations} sentences successfully augmented "
                      f"out of {attempted_augmentations} attempts.")
+        logging.info(f"Total words augmented: {total_words_augmented}")
         if attempted_augmentations > 0:
             rate = (successful_augmentations / attempted_augmentations) * 100
             logging.info(f"Success rate: {rate:.2f}%")
@@ -496,6 +500,7 @@ class AdvancedSynonymReplacerDF(AdvancedSynonymReplacer):
         """
         super().__init__(params, train_df)
         self.train_df = train_df
+        self._prepare_data()
         
     def _prepare_data(self):
         """Prepares the data by adding POS tags and calculating word frequencies without removing stopwords."""
@@ -503,12 +508,6 @@ class AdvancedSynonymReplacerDF(AdvancedSynonymReplacer):
             self.train_df['POS_Evidence'] = self.train_df['Evidence'].apply(
                 lambda x: nltk.pos_tag(nltk.word_tokenize(x))
             )
-
-        self.original_evidences_pos = self.train_df['POS_Evidence'].tolist()
-        self.original_evidences = self.train_df['Evidence'].tolist()
-        # Don't remove stopwords for transformer models
-        self.preprocessed_evidences = self.train_df['Evidence'].tolist()
-        self.corresponding_claim = self.train_df['Claim'].tolist()
 
         # Calculate word frequencies
         all_words = []
@@ -527,20 +526,19 @@ class AdvancedSynonymReplacerDF(AdvancedSynonymReplacer):
         """
         successful_augmentations = 0
         attempted_augmentations = 0
+        total_words_augmented = 0  # Counter for the number of words augmented
 
-        original_claims = self.train_df['Claim'].tolist()
-        labels = self.train_df['label'].tolist()
-
-        for idx, original_evidence_text in tqdm(
-            enumerate(self.original_evidences),
+        for idx, row in tqdm(
+            self.train_df.iterrows(),
             desc="Augmenting data",
-            total=len(self.original_evidences)
+            total=len(self.train_df)
         ):
             attempted_augmentations += 1
-            original_claim_text = original_claims[idx]
+            original_evidence_text = row['Evidence']
+            original_claim_text = row['Claim']
 
             # POS tagging for evidence
-            evidence_pos_tags = self.original_evidences_pos[idx]
+            evidence_pos_tags = row['POS_Evidence']
             evidence_pos_tags_dict = defaultdict(list)
             for word, tag in evidence_pos_tags:
                 evidence_pos_tags_dict[word.lower()].append(tag)
@@ -587,6 +585,7 @@ class AdvancedSynonymReplacerDF(AdvancedSynonymReplacer):
                         try:
                             current_evidence = re.sub(pattern, replacement, current_evidence, flags=re.IGNORECASE)
                             final_word_replacement_map_evidence[word] = replacement
+                            total_words_augmented += 1  # Increment the counter for each successful replacement
                         except re.error:
                             logging.warning(f"Regex error applying replacement for '{word}' with '{replacement}'.")
                 augmented_evidence_text = current_evidence
@@ -603,6 +602,7 @@ class AdvancedSynonymReplacerDF(AdvancedSynonymReplacer):
         # Log final statistics
         logging.info(f"Augmentation completed. {successful_augmentations} sentences successfully augmented "
                      f"out of {attempted_augmentations} attempts.")
+        logging.info(f"Total words augmented: {total_words_augmented}")
         if attempted_augmentations > 0:
             rate = (successful_augmentations / attempted_augmentations) * 100
             logging.info(f"Success rate: {rate:.2f}%")

@@ -78,8 +78,8 @@ def synonym_replace_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFrame:
         "replacement_fraction": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["replacement_fraction"],
         "min_sentence_similarity": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["min_similarity"],
         "min_word_length": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["min_word_length"],
+        "word_frequency_threshold": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["word_frequency_threshold"],
         "synonym_selection_strategy": "random",
-        "word_frequency_threshold": 3,
         "enable_random_insertion": False,
         "enable_random_deletion": False
     }
