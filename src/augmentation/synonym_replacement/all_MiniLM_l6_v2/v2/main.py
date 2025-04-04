@@ -75,9 +75,14 @@ class AdvancedSynonymReplacer:
         self.synonym_selection_strategy = params.get("synonym_selection_strategy", "random")  # 'random' or 'frequent'
         self.allow_multi_word_synonyms = params.get("allow_multi_word_synonyms", False)
         self.word_frequency_threshold = params.get("word_frequency_threshold", 5) # Minimum frequency for a word to be considered for replacement
-        self.enable_random_insertion = params.get("enable_random_insertion", False)
-        self.insertion_probability = params.get("insertion_probability", 0.05)
-        self.enable_random_deletion = params.get("enable_random_deletion", False)
+        
+        self.enable_random_synonym_insertion = params.get("enable_random_synonym_insertion", False)
+        self.synonym_insertion_probability = params.get("synonym_insertion_probability", 0.05)
+        
+        self.enable_random_word_insertion = params.get("enable_random_word_insertion", False)
+        self.word_insertion_probability = params.get("word_insertion_probability", 0.05)
+        
+        self.enable_random_deletion = params.get("enable_random_synonym_deletion", False)
         self.deletion_probability = params.get("deletion_probability", 0.05)
 
         # Store original DataFrame and create POS tags
@@ -243,6 +248,15 @@ class AdvancedSynonymReplacer:
 
         return synonym_list[:topn]
 
+    def get_random_word(self) -> list[str]:
+        """
+        Get a random word from the training data.
+
+        Returns:
+            str: A random word from the training data.
+        """
+        return [random.choice(list(self.word_frequencies.keys()))]
+
 
     def find_valid_replacements(
         self,
@@ -301,29 +315,31 @@ class AdvancedSynonymReplacer:
         return False, ""
 
 
-    def _random_insertion(self, tokens: list[str], pos_tags: list[tuple[str, str]]) -> list[str]:
+    def _random_insertion(self, tokens: list[str], pos_tags: list[tuple[str, str]], add_a_synonym: bool = True) -> list[str]:
         """Randomly insert synonyms into the text."""
         augmented_tokens = list(tokens)
-        num_insertions = random.randint(0, int(len(tokens) * self.insertion_probability) + 1)
-
-        for _ in range(num_insertions):
-            if not augmented_tokens:
-                continue
+        
+        if not augmented_tokens:
+            return []
+        
+        insert_index = random.randint(0, len(augmented_tokens))
+        word_to_augment = random.choice(augmented_tokens)
+        lower_word = word_to_augment.lower()
+        original_word_pos_tags = dict(pos_tags).get(lower_word, [])
+        
+        if not original_word_pos_tags:
+            return []
+        
+        if add_a_synonym:
+            synonyms = self.get_synonyms(word_to_augment, original_word_pos_tags, topn=5)
+        else:
+            synonyms = self.get_random_word()
             
-            insert_index = random.randint(0, len(augmented_tokens))
-            word_to_augment = random.choice(augmented_tokens)
-            lower_word = word_to_augment.lower()
-            original_word_pos_tags = dict(pos_tags).get(lower_word, [])
-            
-            if original_word_pos_tags:
-                word_pos_tag = original_word_pos_tags
-                synonyms = self.get_synonyms(word_to_augment, word_pos_tag, topn=5)
-                
-                if not synonyms:
-                    continue
-                
-                synonym_to_insert = random.choice(synonyms)
-                augmented_tokens.insert(insert_index, synonym_to_insert)
+        if not synonyms:
+            return []
+        
+        synonym_to_insert = random.choice(synonyms)
+        augmented_tokens.insert(insert_index, synonym_to_insert)
                     
         return augmented_tokens
 
@@ -333,9 +349,8 @@ class AdvancedSynonymReplacer:
         if not tokens:
             return []
         
-        augmented_tokens = [token for token in tokens]
-        num_deletions = random.randint(0, int(len(tokens) * self.deletion_probability) + 1)
-        indices_to_delete = random.sample(range(len(augmented_tokens)), num_deletions)
+        augmented_tokens = [token for token in tokens]  
+        indices_to_delete = random.sample(range(len(augmented_tokens)), random.randint(0, int(len(augmented_tokens) * 0.1)))
         augmented_tokens = [token for i, token in enumerate(augmented_tokens) if i not in indices_to_delete]
         
         return augmented_tokens
@@ -388,11 +403,17 @@ class AdvancedSynonymReplacer:
                 evidence_pos_tags_dict[word.lower()].append(tag)
             evidence_tokens = nltk.word_tokenize(original_evidence_text)
 
-            # Augment Evidence
             augmented_evidence_tokens = list(evidence_tokens)
-            if self.enable_random_insertion:
-                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags)
-            if self.enable_random_deletion:
+            are_synonyms_inserted = random.randint(0, 100) <= int((100 * self.synonym_insertion_probability))
+            if self.enable_random_synonym_insertion and are_synonyms_inserted:
+                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags, add_a_synonym=True)
+                
+            are_words_inserted = random.randint(0, 100) <= int((100 * self.word_insertion_probability))
+            if self.enable_random_word_insertion and are_words_inserted:
+                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags, add_a_synonym=False)
+                
+            are_synonyms_deleted = random.randint(0, 100) <= int((100 * self.deletion_probability))
+            if self.enable_random_deletion and are_synonyms_deleted:
                 augmented_evidence_tokens = self._random_deletion(augmented_evidence_tokens)
 
             potential_evidence_replacements = self._process_text(
@@ -544,11 +565,17 @@ class AdvancedSynonymReplacerDF(AdvancedSynonymReplacer):
                 evidence_pos_tags_dict[word.lower()].append(tag)
             evidence_tokens = nltk.word_tokenize(original_evidence_text)
 
-            # Augment Evidence
             augmented_evidence_tokens = list(evidence_tokens)
-            if self.enable_random_insertion:
-                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags)
-            if self.enable_random_deletion:
+            are_synonyms_inserted = random.randint(0, 100) <= int((100 * self.synonym_insertion_probability))
+            if self.enable_random_synonym_insertion and are_synonyms_inserted:
+                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags, add_a_synonym=True)
+                
+            are_words_inserted = random.randint(0, 100) <= int((100 * self.word_insertion_probability))
+            if self.enable_random_word_insertion and are_words_inserted:
+                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags, add_a_synonym=False)
+                
+            are_synonyms_deleted = random.randint(0, 100) <= int((100 * self.deletion_probability))
+            if self.enable_random_deletion and are_synonyms_deleted:
                 augmented_evidence_tokens = self._random_deletion(augmented_evidence_tokens)
 
             potential_evidence_replacements = self._process_text(

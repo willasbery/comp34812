@@ -12,7 +12,7 @@ class BaseConfig:
     AUGMENTATION_CONFIG = {
         "0": {
             "replace": 0.0,
-            "add": 0.001,
+            "add": 0.1, # 10%
             "translate":{
                 "percentage": 0.8,
                 "split": {
@@ -98,7 +98,7 @@ class BaseConfig:
                 }
             },
             "x_or_y": {
-                "percentage": 0.5,
+                "percentage": 0.7,
                 "max_choices": 4,
                 "num_words_to_augment": {
                     "Claim": 1,
