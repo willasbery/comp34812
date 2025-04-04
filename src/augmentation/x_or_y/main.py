@@ -111,8 +111,46 @@ class XorYAugmenter:
         synonyms_to_return = random.sample(synonym_list, min(topn, len(synonym_list)))
 
         return synonyms_to_return
+    
+    
+    def _augment(self, text: str, new_text: str) -> str | None:
+        candidates = self._find_candidates(text)
+                
+        if len(candidates) == 0:
+            return None
+        
+        # Get the top max(num_words_to_augment, 3) candidates
+        candidates = candidates[:max(self.num_words_to_augment, 3)]
+        
+        # Get a number between 1 and num_words_to_augment
+        num_words_to_add = random.randint(1, self.num_words_to_augment)
+        
+        # Get the top num_words_to_add candidates
+        candidates = candidates[:num_words_to_add]
+        
+        for candidate in candidates:
+            similar_words = self._get_similar_word(candidate[0], candidate[1])
+            
+            if len(similar_words) == 0:
+                return None
+            
+            # Get a random number of words, from 1 to max_choices - 1
+            # We minus 1 because we already have the first choice (candidate[0])
+            num_words = random.randint(1, self.max_choices - 1)
+            
+            # Randomly select num_words similar words
+            similar_words = random.sample(similar_words, min(num_words, len(similar_words)))
+            # Add the original word to the list
+            similar_words.append(candidate[0])
+            # Randomly shuffle, just in case
+            random.shuffle(similar_words)
+                    
+            new_text = new_text.replace(candidate[0], '/'.join(similar_words))
+            
+        return new_text
 
-    def augment_claims(self, claims: pd.DataFrame) -> pd.DataFrame:
+
+    def augment_data(self, data: pd.DataFrame, augment_claim: bool = True, augment_evidence: bool = False) -> pd.DataFrame:
         """
         Augment the claims by adding a '/' between words
 
@@ -124,46 +162,22 @@ class XorYAugmenter:
         """
         augmented_claims = []
         
-        for _, row in tqdm(claims.iterrows(), total=len(claims), desc="Augmenting claims"):
+        for _, row in tqdm(data.iterrows(), total=len(data), desc="Augmenting dataset"):
             claim = row['Claim']
-            candidates = self._find_candidates(claim)
-            
-            if len(candidates) == 0:
-                continue
-            
-            # Get the top max(num_words_to_augment, 3) candidates
-            candidates = candidates[:max(self.num_words_to_augment, 3)]
-            
-            # Get a number between 1 and num_words_to_augment
-            num_words_to_add = random.randint(1, self.num_words_to_augment)
-            
-            # Get the top num_words_to_add candidates
-            candidates = candidates[:num_words_to_add]
+            evidence = row['Evidence']
             
             new_claim = claim
+            new_evidence = evidence
             
-            for candidate in candidates:
-                similar_words = self._get_similar_word(candidate[0], candidate[1])
-                
-                if len(similar_words) == 0:
-                    continue
-                
-                # Get a random number of words, from 1 to max_choices - 1
-                # We minus 1 because we already have the first choice (candidate[0])
-                num_words = random.randint(1, self.max_choices - 1)
-                
-                # Randomly select num_words similar words
-                similar_words = random.sample(similar_words, min(num_words, len(similar_words)))
-                # Add the original word to the list
-                similar_words.append(candidate[0])
-                # Randomly shuffle, just in case
-                random.shuffle(similar_words)
-                        
-                new_claim = new_claim.replace(candidate[0], '/'.join(similar_words))
-                
+            if augment_claim:
+                new_claim = self._augment(claim, new_claim)
+            
+            if augment_evidence:
+                new_evidence = self._augment(evidence, new_evidence)
+            
             augmented_claims.append({
                 "Claim": new_claim,
-                "Evidence": row['Evidence'],
+                "Evidence": new_evidence,
                 "label": row['label']
             })
                 
