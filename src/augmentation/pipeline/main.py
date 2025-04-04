@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 from src.config import config
 from src.augmentation.back_translation.main import back_translate_batch
+from src.augmentation.synonym_replacement.all_MiniLM_l6_v2.v2.main import AdvancedSynonymReplacerDF
 
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
@@ -59,6 +60,38 @@ async def back_translate_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFra
 
     return aug_df
     
+def synonym_replace_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFrame:
+    """
+    Apply synonym replacement augmentation to the specified samples.
+    Modifies the input DataFrame in-place.
+    
+    Args:
+        aug_df (pd.DataFrame): DataFrame containing samples to augment
+        label (str): Label identifier ("0" or "1") to get config parameters
+        
+    Returns:
+        pd.DataFrame: The modified input DataFrame
+    """
+    logging.info(f"Starting synonym replacement for label {label}")
+    
+    params = {
+        "replacement_fraction": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["replacement_fraction"],
+        "min_sentence_similarity": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["min_similarity"],
+        "min_word_length": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["min_word_length"],
+        "synonym_selection_strategy": "random",
+        "word_frequency_threshold": 3,
+        "enable_random_insertion": False,
+        "enable_random_deletion": False
+    }
+    percentage_to_translate = config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["percentage"]
+    samples = aug_df.sample(frac=percentage_to_translate)
+    
+    replacer = AdvancedSynonymReplacerDF(params, samples)
+    replacer.augment_data()  # This now modifies aug_df directly
+    
+    logging.info(f"Completed synonym replacement for label {label}")
+    aug_df.update(samples)
+    return aug_df  # Return the modified DataFrame
 
 async def main():
     aug_df = pd.read_csv(config.TRAIN_FILE)
@@ -86,14 +119,18 @@ async def main():
     ones_to_add_indices = generate_augmented_samples(aug_df[aug_df['label'] == 1], label_counts[1], ones_to_add)
 
     #generate addition df
-    ones_to_add_df = aug_df.iloc[ones_to_add_indices].reset_index(drop=True)
-    zeros_to_add_df = aug_df.iloc[zeros_to_add_indices].reset_index(drop=True)
+    ones_to_add_df = aug_df.iloc[ones_to_add_indices].reset_index(drop=True).copy()
+    zeros_to_add_df = aug_df.iloc[zeros_to_add_indices].reset_index(drop=True).copy()
 
     # back translation
     # await back_translate_samples(zeros_to_add_df, "0")
     # await back_translate_samples(ones_to_add_df, "1")
+    print(zeros_to_add_df)
     # synonym replacement
+    synonym_replace_samples(zeros_to_add_df, "0")
+    # ones_augmented = synonym_replace_samples(ones_to_add_df, "1")
     
+    print(zeros_to_add_df)
 
     # synonym addition
 

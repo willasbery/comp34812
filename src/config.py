@@ -12,7 +12,7 @@ class BaseConfig:
     AUGMENTATION_CONFIG = {
         "0": {
             "replace": 0.0,
-            "add": 0.1,
+            "add": 0.001,
             "translate":{
                 "percentage": 0.8,
                 "split": {
@@ -29,6 +29,9 @@ class BaseConfig:
             },
             "synonym_replacement": {
                 "percentage": 0.8,
+                "replacement_fraction": 0.3,
+                "min_similarity": 0.85,
+                "min_word_length": 4,
                 "split": {
                     "Claim": 0.15,
                     "Evidence": 0.7,
@@ -63,6 +66,9 @@ class BaseConfig:
             },
             "synonym_replacement": {
                 "percentage": 0.8,
+                "replacement_fraction": 0.3,
+                "min_similarity": 0.85,
+                "min_word_length": 4,
                 "split": {
                     "Claim": 0.15,
                     "Evidence": 0.7,

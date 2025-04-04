@@ -480,6 +480,138 @@ class AdvancedSynonymReplacer:
         return successful_augmentations
 
 
+class AdvancedSynonymReplacerDF(AdvancedSynonymReplacer):
+    """
+    A variation of AdvancedSynonymReplacer that modifies the input DataFrame directly
+    and preserves stop words for use with transformer models.
+    """
+    
+    def __init__(self, params: dict, train_df: pd.DataFrame):
+        """
+        Initialize the AdvancedSynonymReplacerDF with parameters and training data.
+        
+        Args:
+            params (dict): Dictionary of parameters for augmentation.
+            train_df (pd.DataFrame): Original training DataFrame.
+        """
+        super().__init__(params, train_df)
+        self.train_df = train_df
+        
+    def _prepare_data(self):
+        """Prepares the data by adding POS tags and calculating word frequencies without removing stopwords."""
+        if 'POS' not in self.train_df.columns:
+            self.train_df['POS_Evidence'] = self.train_df['Evidence'].apply(
+                lambda x: nltk.pos_tag(nltk.word_tokenize(x))
+            )
+
+        self.original_evidences_pos = self.train_df['POS_Evidence'].tolist()
+        self.original_evidences = self.train_df['Evidence'].tolist()
+        # Don't remove stopwords for transformer models
+        self.preprocessed_evidences = self.train_df['Evidence'].tolist()
+        self.corresponding_claim = self.train_df['Claim'].tolist()
+
+        # Calculate word frequencies
+        all_words = []
+        for text in self.train_df['Evidence']:
+            all_words.extend(nltk.word_tokenize(text.lower()))
+        self.word_frequencies = Counter(all_words)
+    
+    def augment_data(self):
+        """
+        Perform the data augmentation on each evidence in the input DataFrame
+        by replacing words with synonyms, and optionally inserting or deleting words.
+        Modifies the input DataFrame in-place.
+        
+        Returns:
+            pd.DataFrame: Reference to the modified input DataFrame.
+        """
+        successful_augmentations = 0
+        attempted_augmentations = 0
+
+        original_claims = self.train_df['Claim'].tolist()
+        labels = self.train_df['label'].tolist()
+
+        for idx, original_evidence_text in tqdm(
+            enumerate(self.original_evidences),
+            desc="Augmenting data",
+            total=len(self.original_evidences)
+        ):
+            attempted_augmentations += 1
+            original_claim_text = original_claims[idx]
+
+            # POS tagging for evidence
+            evidence_pos_tags = self.original_evidences_pos[idx]
+            evidence_pos_tags_dict = defaultdict(list)
+            for word, tag in evidence_pos_tags:
+                evidence_pos_tags_dict[word.lower()].append(tag)
+            evidence_tokens = nltk.word_tokenize(original_evidence_text)
+
+            # Augment Evidence
+            augmented_evidence_tokens = list(evidence_tokens)
+            if self.enable_random_insertion:
+                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags)
+            if self.enable_random_deletion:
+                augmented_evidence_tokens = self._random_deletion(augmented_evidence_tokens)
+
+            potential_evidence_replacements = self._process_text(
+                augmented_evidence_tokens,
+                evidence_pos_tags,
+                claim_words=set()
+            )
+
+            num_evidence_replacements = max(0, int(len(potential_evidence_replacements) * self.replacement_fraction))
+            
+            if potential_evidence_replacements and num_evidence_replacements > 0:
+                words_to_replace = random.sample(potential_evidence_replacements, k=num_evidence_replacements)
+                current_evidence = " ".join(augmented_evidence_tokens)
+                final_word_replacement_map_evidence = {}
+
+                for word in words_to_replace:
+                    lower_word = word.lower()
+                    if lower_word not in evidence_pos_tags_dict or not evidence_pos_tags_dict[lower_word]:
+                        continue
+
+                    word_pos_tag = evidence_pos_tags_dict[lower_word][0]
+                    synonyms = self.get_synonyms(word, word_pos_tag, topn=10)
+                    if not synonyms:
+                        continue
+
+                    found, replacement = self.find_valid_replacements(
+                        word,
+                        synonyms,
+                        current_evidence,
+                        evidence_pos_tags_dict
+                    )
+                    if found:
+                        pattern = r'\b' + re.escape(word) + r'\b'
+                        try:
+                            current_evidence = re.sub(pattern, replacement, current_evidence, flags=re.IGNORECASE)
+                            final_word_replacement_map_evidence[word] = replacement
+                        except re.error:
+                            logging.warning(f"Regex error applying replacement for '{word}' with '{replacement}'.")
+                augmented_evidence_text = current_evidence
+            else:
+                augmented_evidence_text = " ".join(augmented_evidence_tokens)
+
+            # Validate the final augmented evidence text
+            final_similarity_score = self.calculate_sentence_similarity(original_evidence_text, augmented_evidence_text)
+            if final_similarity_score >= self.min_sentence_similarity:
+                # Update the Evidence text directly in the input DataFrame
+                self.train_df.at[idx, 'Evidence'] = augmented_evidence_text
+                successful_augmentations += 1
+
+        # Log final statistics
+        logging.info(f"Augmentation completed. {successful_augmentations} sentences successfully augmented "
+                     f"out of {attempted_augmentations} attempts.")
+        if attempted_augmentations > 0:
+            rate = (successful_augmentations / attempted_augmentations) * 100
+            logging.info(f"Success rate: {rate:.2f}%")
+        else:
+            logging.info("No augmentation attempts were made.")
+
+        return self.train_df
+
+
 def main():
     """
     Main function to parse arguments, load data,
@@ -610,5 +742,9 @@ def main():
     train_df = pd.read_csv(config.TRAIN_FILE)
 
     # Perform augmentation
-    synonym_replacer = AdvancedSynonymReplacer(params, train_df)
-    synonym_replacer.augment_data()
+    synonym_replacer = AdvancedSynonymReplacerDF(params, train_df)
+    synonym_replaced_df = synonym_replacer.augment_data()
+
+    # Save augmented data to CSV
+    logging.info(f"Saving augmented data to {output_path}")
+    synonym_replaced_df.to_csv(output_path, index=False)
