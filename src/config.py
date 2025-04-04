@@ -45,6 +45,19 @@ class BaseConfig:
                     "Evidence": 0.9,
                     "Both": 0.0
                 }
+            },
+            "x_or_y": {
+                "percentage": 0.3,
+                "max_choices": 4,
+                "num_words_to_augment": {
+                    "Claim": 1,
+                    "Evidence": 2
+                },
+                "split": {
+                    "Claim": 0.90,
+                    "Evidence": 0.05,
+                    "Both": 0.05
+                }
             }
         },
         "1": {
@@ -81,6 +94,19 @@ class BaseConfig:
                     "Claim": 0.1,
                     "Evidence": 0.9,
                     "Both": 0.0
+                }
+            },
+            "x_or_y": {
+                "percentage": 0.5,
+                "max_choices": 4,
+                "num_words_to_augment": {
+                    "Claim": 1,
+                    "Evidence": 1
+                },
+                "split": {
+                    "Claim": 0.90,
+                    "Evidence": 0.05,
+                    "Both": 0.05
                 }
             }
         }

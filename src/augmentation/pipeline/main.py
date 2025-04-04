@@ -1,6 +1,6 @@
 """
 PLAN:
-1. specify the percentage of data to augment for each label and wether to replace or add
+1. specify the percentage of data to augment for each label and whether to replace or add
 2. Load training data
 3. basic cleaning and preprocessing (this will be done to test and validation data as well)
 4. back translation
@@ -13,25 +13,54 @@ import logging
 import random
 import pandas as pd
 import numpy as np
+
 from src.config import config
 from src.augmentation.back_translation.main import back_translate_batch
 from src.augmentation.synonym_replacement.all_MiniLM_l6_v2.v2.main import AdvancedSynonymReplacerDF
+from src.augmentation.x_or_y.main import XorYAugmenter
+
 
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO)
 
+
 def generate_augmented_samples(df: pd.DataFrame, label_counts: np.int64, num_samples: int) -> list[pd.DataFrame.index]:
+    """
+    Generate a list of indices of the samples to augment.
+
+    Args:
+        df (pd.DataFrame): The dataframe to augment
+        label_counts (np.int64): The number of samples for the label
+        num_samples (int): The number of samples to augment
+
+    Returns:
+        list[pd.DataFrame.index]: The list of indices of the samples to augment
+    """
     indices = []
+    
     if num_samples > label_counts:
         full_repeats = num_samples // label_counts
         indices.extend(df.index.repeat(full_repeats))
         num_samples %= label_counts
+        
     if num_samples > 0:
         indices.extend(df.sample(num_samples).index)
+        
     return indices
 
+
 async def back_translate_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFrame:
+    """
+    Back translate the samples for the specified label.
+
+    Args:
+        aug_df (pd.DataFrame): The dataframe to augment
+        label (str): The label to augment
+        
+    Returns:
+        pd.DataFrame: The augmented dataframe
+    """
     src = config.AUGMENTATION_CONFIG[label]["translate"]["src"]
 
     percentage_to_translate = config.AUGMENTATION_CONFIG[label]["translate"]["percentage"]
@@ -45,20 +74,29 @@ async def back_translate_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFra
 
     split_samples = {
         "Claim": samples.iloc[:claim_count],
-        "Evidence": samples.iloc[claim_count:claim_count+evidence_count],
-        "Both": samples.iloc[claim_count+evidence_count:]
+        "Evidence": samples.iloc[claim_count: claim_count + evidence_count],
+        "Both": samples.iloc[claim_count + evidence_count:]
     }
 
     for text_type, sample in split_samples.items():
         count = 0
+        
         for lang, percentage in languages.items():
-            if count + int(len(sample) * percentage) > len(sample):
+            # Calculate number of samples for this language
+            num_samples = int(len(sample) * percentage)
+            
+            # Handle the remaining samples if we're at the end
+            if count + num_samples >= len(sample):
                 aug_df.update(await back_translate_batch(sample.iloc[count:], text_type, src, lang))
                 break
-            aug_df.update(await back_translate_batch(sample.iloc[count:count + int(len(sample) * percentage)], text_type, src, lang))
-            count += int(len(sample) * percentage)
+            
+            # Process the current batch
+            current_batch = sample.iloc[count:count + num_samples]
+            aug_df.update(await back_translate_batch(current_batch, text_type, src, lang))
+            count += num_samples
 
     return aug_df
+    
     
 def synonym_replace_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFrame:
     """
@@ -92,6 +130,45 @@ def synonym_replace_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFrame:
     logging.info(f"Completed synonym replacement for label {label}")
     aug_df.update(samples)
     return aug_df  # Return the modified DataFrame
+
+
+def x_or_y_augment_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFrame:
+    """
+    Apply x or y augmentation to the specified samples.
+
+    Args:
+        aug_df (pd.DataFrame): The dataframe to augment
+        label (str): The label to augment
+        
+    Returns:
+        pd.DataFrame: The augmented dataframe
+    """
+    percentage_to_augment = config.AUGMENTATION_CONFIG[label]["x_or_y"]["percentage"]
+    all_samples = aug_df.sample(frac=percentage_to_augment)
+    
+    max_choices = config.AUGMENTATION_CONFIG[label]["x_or_y"]["max_choices"]
+    claim_num_words_to_augment = config.AUGMENTATION_CONFIG[label]["x_or_y"]["num_words_to_augment"]["Claim"]
+    evidence_num_words_to_augment = config.AUGMENTATION_CONFIG[label]["x_or_y"]["num_words_to_augment"]["Evidence"]
+    
+    claim_samples = all_samples.sample(frac=config.AUGMENTATION_CONFIG[label]["x_or_y"]["split"]["Claim"])
+    evidence_samples = all_samples.sample(frac=config.AUGMENTATION_CONFIG[label]["x_or_y"]["split"]["Evidence"])
+    both_samples = all_samples.sample(frac=config.AUGMENTATION_CONFIG[label]["x_or_y"]["split"]["Both"])
+    
+    claim_augmenter = XorYAugmenter(claim_samples, max_choices=max_choices, num_words_to_augment=claim_num_words_to_augment)
+    claim_augmented = claim_augmenter.augment_data(claim_samples, augment_claim=True, augment_evidence=False)
+    
+    evidence_augmenter = XorYAugmenter(evidence_samples, max_choices=max_choices, num_words_to_augment=evidence_num_words_to_augment)
+    evidence_augmented = evidence_augmenter.augment_data(evidence_samples, augment_claim=False, augment_evidence=True)
+    
+    # Crappy work around for the num words to augment but I can't be bothered adding two separate params for it
+    both_augmenter = XorYAugmenter(both_samples, max_choices=max_choices, num_words_to_augment=min(claim_num_words_to_augment, evidence_num_words_to_augment))
+    both_augmented = both_augmenter.augment_data(both_samples, augment_claim=True, augment_evidence=True)
+    
+    augmented_samples = pd.concat([claim_augmented, evidence_augmented, both_augmented])
+    
+    aug_df.update(augmented_samples)
+    return aug_df
+
 
 async def main():
     aug_df = pd.read_csv(config.TRAIN_FILE)
@@ -127,8 +204,14 @@ async def main():
     # await back_translate_samples(ones_to_add_df, "1")
     print(zeros_to_add_df)
     # synonym replacement
-    synonym_replace_samples(zeros_to_add_df, "0")
+    # synonym_replace_samples(zeros_to_add_df, "0")
     # ones_augmented = synonym_replace_samples(ones_to_add_df, "1")
+    
+    print(zeros_to_add_df)
+
+    # x or y augmentation
+    x_or_y_augment_samples(zeros_to_add_df, "0")
+    # ones_augmented = x_or_y_augment_samples(ones_to_add_df, "1")
     
     print(zeros_to_add_df)
 
