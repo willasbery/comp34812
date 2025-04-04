@@ -71,19 +71,6 @@ class XorYAugmenter:
             'RB': wordnet.ADV
         }
         return tag_map.get(nltk_tag[:2], wordnet.NOUN)
-
-    def _get_wordnet_synonyms(self, word: str, pos_tag: str = None, topn: int = 10) -> list[str]:
-        """
-        Get synonyms using WordNet.
-
-        Args:
-            word (str): The word to find synonyms for
-            pos_tag (str): Part of speech tag
-            topn (int): Maximum number of synonyms to return
-
-        Returns:
-            list[str]: List of synonyms
-        """
         
 
     def _get_similar_word(self, word: str, pos_tag: str = None) -> list[str]:
@@ -137,7 +124,7 @@ class XorYAugmenter:
         """
         augmented_claims = []
         
-        for index, row in tqdm(claims.iterrows(), total=len(claims), desc="Augmenting claims"):
+        for _, row in tqdm(claims.iterrows(), total=len(claims), desc="Augmenting claims"):
             claim = row['Claim']
             candidates = self._find_candidates(claim)
             
@@ -167,8 +154,11 @@ class XorYAugmenter:
                 
                 # Randomly select num_words similar words
                 similar_words = random.sample(similar_words, min(num_words, len(similar_words)))
+                # Add the original word to the list
                 similar_words.append(candidate[0])
-                
+                # Randomly shuffle, just in case
+                random.shuffle(similar_words)
+                        
                 new_claim = new_claim.replace(candidate[0], '/'.join(similar_words))
                 
             augmented_claims.append({
