@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import random
 import re
+import string
 from collections import defaultdict, Counter
 from pathlib import Path
 from tqdm import tqdm
@@ -24,6 +25,7 @@ nltk.download('averaged_perceptron_tagger_eng')
 nltk.download('wordnet')
 nltk.download('omw-1.4')
 nltk.download('stopwords')
+nltk.download('punkt_tab')
 
 # Configure logging
 logging.basicConfig(
@@ -74,9 +76,14 @@ class AdvancedSynonymReplacer:
         self.synonym_selection_strategy = params.get("synonym_selection_strategy", "random")  # 'random' or 'frequent'
         self.allow_multi_word_synonyms = params.get("allow_multi_word_synonyms", False)
         self.word_frequency_threshold = params.get("word_frequency_threshold", 5) # Minimum frequency for a word to be considered for replacement
-        self.enable_random_insertion = params.get("enable_random_insertion", False)
-        self.insertion_probability = params.get("insertion_probability", 0.05)
-        self.enable_random_deletion = params.get("enable_random_deletion", False)
+        
+        self.enable_random_synonym_insertion = params.get("enable_random_synonym_insertion", False)
+        self.synonym_insertion_probability = params.get("synonym_insertion_probability", 0.05)
+        
+        self.enable_random_word_insertion = params.get("enable_random_word_insertion", False)
+        self.word_insertion_probability = params.get("word_insertion_probability", 0.05)
+        
+        self.enable_random_deletion = params.get("enable_random_synonym_deletion", False)
         self.deletion_probability = params.get("deletion_probability", 0.05)
 
         # Store original DataFrame and create POS tags
@@ -242,6 +249,15 @@ class AdvancedSynonymReplacer:
 
         return synonym_list[:topn]
 
+    def get_random_word(self) -> list[str]:
+        """
+        Get a random word from the training data.
+
+        Returns:
+            str: A random word from the training data.
+        """
+        return [random.choice(list(self.word_frequencies.keys()))]
+
 
     def find_valid_replacements(
         self,
@@ -300,29 +316,31 @@ class AdvancedSynonymReplacer:
         return False, ""
 
 
-    def _random_insertion(self, tokens: list[str], pos_tags: list[tuple[str, str]]) -> list[str]:
+    def _random_insertion(self, tokens: list[str], pos_tags: list[tuple[str, str]], add_a_synonym: bool = True) -> list[str]:
         """Randomly insert synonyms into the text."""
         augmented_tokens = list(tokens)
-        num_insertions = random.randint(0, int(len(tokens) * self.insertion_probability) + 1)
-
-        for _ in range(num_insertions):
-            if not augmented_tokens:
-                continue
+        
+        if not augmented_tokens:
+            return []
+        
+        insert_index = random.randint(0, len(augmented_tokens))
+        word_to_augment = random.choice(augmented_tokens)
+        lower_word = word_to_augment.lower()
+        original_word_pos_tags = dict(pos_tags).get(lower_word, [])
+        
+        if not original_word_pos_tags:
+            return []
+        
+        if add_a_synonym:
+            synonyms = self.get_synonyms(word_to_augment, original_word_pos_tags, topn=5)
+        else:
+            synonyms = self.get_random_word()
             
-            insert_index = random.randint(0, len(augmented_tokens))
-            word_to_augment = random.choice(augmented_tokens)
-            lower_word = word_to_augment.lower()
-            original_word_pos_tags = dict(pos_tags).get(lower_word, [])
-            
-            if original_word_pos_tags:
-                word_pos_tag = original_word_pos_tags
-                synonyms = self.get_synonyms(word_to_augment, word_pos_tag, topn=5)
-                
-                if not synonyms:
-                    continue
-                
-                synonym_to_insert = random.choice(synonyms)
-                augmented_tokens.insert(insert_index, synonym_to_insert)
+        if not synonyms:
+            return []
+        
+        synonym_to_insert = random.choice(synonyms)
+        augmented_tokens.insert(insert_index, synonym_to_insert)
                     
         return augmented_tokens
 
@@ -332,9 +350,8 @@ class AdvancedSynonymReplacer:
         if not tokens:
             return []
         
-        augmented_tokens = [token for token in tokens]
-        num_deletions = random.randint(0, int(len(tokens) * self.deletion_probability) + 1)
-        indices_to_delete = random.sample(range(len(augmented_tokens)), num_deletions)
+        augmented_tokens = [token for token in tokens]  
+        indices_to_delete = random.sample(range(len(augmented_tokens)), random.randint(0, int(len(augmented_tokens) * 0.1)))
         augmented_tokens = [token for i, token in enumerate(augmented_tokens) if i not in indices_to_delete]
         
         return augmented_tokens
@@ -367,6 +384,7 @@ class AdvancedSynonymReplacer:
 
         successful_augmentations = 0
         attempted_augmentations = 0
+        total_words_augmented = 0  # Counter for the number of words augmented
 
         original_claims = self.train_df['Claim'].tolist()
         labels = self.train_df['label'].tolist()
@@ -386,11 +404,17 @@ class AdvancedSynonymReplacer:
                 evidence_pos_tags_dict[word.lower()].append(tag)
             evidence_tokens = nltk.word_tokenize(original_evidence_text)
 
-            # Augment Evidence
             augmented_evidence_tokens = list(evidence_tokens)
-            if self.enable_random_insertion:
-                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags)
-            if self.enable_random_deletion:
+            are_synonyms_inserted = random.randint(0, 100) <= int((100 * self.synonym_insertion_probability))
+            if self.enable_random_synonym_insertion and are_synonyms_inserted:
+                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags, add_a_synonym=True)
+                
+            are_words_inserted = random.randint(0, 100) <= int((100 * self.word_insertion_probability))
+            if self.enable_random_word_insertion and are_words_inserted:
+                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags, add_a_synonym=False)
+                
+            are_synonyms_deleted = random.randint(0, 100) <= int((100 * self.deletion_probability))
+            if self.enable_random_deletion and are_synonyms_deleted:
                 augmented_evidence_tokens = self._random_deletion(augmented_evidence_tokens)
 
             potential_evidence_replacements = self._process_text(
@@ -427,11 +451,19 @@ class AdvancedSynonymReplacer:
                         try:
                             current_evidence = re.sub(pattern, replacement, current_evidence, flags=re.IGNORECASE)
                             final_word_replacement_map_evidence[word] = replacement
+                            total_words_augmented += 1  # Increment the counter for each successful replacement
                         except re.error:
                             logging.warning(f"Regex error applying replacement for '{word}' with '{replacement}'.")
                 augmented_evidence_text = current_evidence
             else:
                 augmented_evidence_text = " ".join(augmented_evidence_tokens)
+                
+            # Remove spaces around hyphens and ensure no space after '<', '[', '(', '{'
+            excluded_punctuation = "<([{"
+            punctuation_to_check = ''.join(c for c in string.punctuation if c not in excluded_punctuation)
+            augmented_evidence_text = re.sub(r'\s+([{}])'.format(re.escape(punctuation_to_check)), r'\1', augmented_evidence_text)
+            augmented_evidence_text = re.sub(r'\s*-\s*', '-', augmented_evidence_text)  # Handle hyphens
+            augmented_evidence_text = re.sub(r'([<\[({])\s+', r'\1', augmented_evidence_text)  # No space after '<', '[', '(', '{'
 
             # Validate the final augmented evidence text
             final_similarity_score = self.calculate_sentence_similarity(original_evidence_text, augmented_evidence_text)
@@ -471,6 +503,7 @@ class AdvancedSynonymReplacer:
         # Log final statistics
         logging.info(f"Augmentation completed. {successful_augmentations} sentences successfully augmented "
                      f"out of {attempted_augmentations} attempts.")
+        logging.info(f"Total words augmented: {total_words_augmented}")
         if attempted_augmentations > 0:
             rate = (successful_augmentations / attempted_augmentations) * 100
             logging.info(f"Success rate: {rate:.2f}%")
@@ -478,6 +511,147 @@ class AdvancedSynonymReplacer:
             logging.info("No augmentation attempts were made.")
 
         return successful_augmentations
+
+
+class AdvancedSynonymReplacerDF(AdvancedSynonymReplacer):
+    """
+    A variation of AdvancedSynonymReplacer that modifies the input DataFrame directly
+    and preserves stop words for use with transformer models.
+    """
+    
+    def __init__(self, params: dict, train_df: pd.DataFrame):
+        """
+        Initialize the AdvancedSynonymReplacerDF with parameters and training data.
+        
+        Args:
+            params (dict): Dictionary of parameters for augmentation.
+            train_df (pd.DataFrame): Original training DataFrame.
+        """
+        super().__init__(params, train_df)
+        self.train_df = train_df
+        self._prepare_data()
+        
+    def _prepare_data(self):
+        """Prepares the data by adding POS tags and calculating word frequencies without removing stopwords."""
+        if 'POS' not in self.train_df.columns:
+            self.train_df['POS_Evidence'] = self.train_df['Evidence'].apply(
+                lambda x: nltk.pos_tag(nltk.word_tokenize(x))
+            )
+
+        # Calculate word frequencies
+        all_words = []
+        for text in self.train_df['Evidence']:
+            all_words.extend(nltk.word_tokenize(text.lower()))
+        self.word_frequencies = Counter(all_words)
+    
+    def augment_data(self):
+        """
+        Perform the data augmentation on each evidence in the input DataFrame
+        by replacing words with synonyms, and optionally inserting or deleting words.
+        Modifies the input DataFrame in-place.
+        
+        Returns:
+            pd.DataFrame: Reference to the modified input DataFrame.
+        """
+        successful_augmentations = 0
+        attempted_augmentations = 0
+        total_words_augmented = 0  # Counter for the number of words augmented
+
+        for idx, row in tqdm(
+            self.train_df.iterrows(),
+            desc="Augmenting data",
+            total=len(self.train_df)
+        ):
+            attempted_augmentations += 1
+            original_evidence_text = row['Evidence']
+            original_claim_text = row['Claim']
+
+            # POS tagging for evidence
+            evidence_pos_tags = row['POS_Evidence']
+            evidence_pos_tags_dict = defaultdict(list)
+            for word, tag in evidence_pos_tags:
+                evidence_pos_tags_dict[word.lower()].append(tag)
+            evidence_tokens = nltk.word_tokenize(original_evidence_text)
+
+            augmented_evidence_tokens = list(evidence_tokens)
+            are_synonyms_inserted = random.randint(0, 100) <= int((100 * self.synonym_insertion_probability))
+            if self.enable_random_synonym_insertion and are_synonyms_inserted:
+                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags, add_a_synonym=True)
+                
+            are_words_inserted = random.randint(0, 100) <= int((100 * self.word_insertion_probability))
+            if self.enable_random_word_insertion and are_words_inserted:
+                augmented_evidence_tokens = self._random_insertion(augmented_evidence_tokens, evidence_pos_tags, add_a_synonym=False)
+                
+            are_synonyms_deleted = random.randint(0, 100) <= int((100 * self.deletion_probability))
+            if self.enable_random_deletion and are_synonyms_deleted:
+                augmented_evidence_tokens = self._random_deletion(augmented_evidence_tokens)
+
+            potential_evidence_replacements = self._process_text(
+                augmented_evidence_tokens,
+                evidence_pos_tags,
+                claim_words=set()
+            )
+
+            num_evidence_replacements = max(0, int(len(potential_evidence_replacements) * self.replacement_fraction))
+            
+            if potential_evidence_replacements and num_evidence_replacements > 0:
+                words_to_replace = random.sample(potential_evidence_replacements, k=num_evidence_replacements)
+                current_evidence = " ".join(augmented_evidence_tokens)
+                final_word_replacement_map_evidence = {}
+
+                for word in words_to_replace:
+                    lower_word = word.lower()
+                    if lower_word not in evidence_pos_tags_dict or not evidence_pos_tags_dict[lower_word]:
+                        continue
+
+                    word_pos_tag = evidence_pos_tags_dict[lower_word][0]
+                    synonyms = self.get_synonyms(word, word_pos_tag, topn=10)
+                    if not synonyms:
+                        continue
+
+                    found, replacement = self.find_valid_replacements(
+                        word,
+                        synonyms,
+                        current_evidence,
+                        evidence_pos_tags_dict
+                    )
+                    if found:
+                        pattern = r'\b' + re.escape(word) + r'\b'
+                        try:
+                            current_evidence = re.sub(pattern, replacement, current_evidence, flags=re.IGNORECASE)
+                            final_word_replacement_map_evidence[word] = replacement
+                            total_words_augmented += 1  # Increment the counter for each successful replacement
+                        except re.error:
+                            logging.warning(f"Regex error applying replacement for '{word}' with '{replacement}'.")
+                augmented_evidence_text = current_evidence
+            else:
+                augmented_evidence_text = " ".join(augmented_evidence_tokens)
+
+            # Remove spaces around hyphens and ensure no space after '<', '[', '(', '{'
+            excluded_punctuation = "<([{"
+            punctuation_to_check = ''.join(c for c in string.punctuation if c not in excluded_punctuation)
+            augmented_evidence_text = re.sub(r'\s+([{}])'.format(re.escape(punctuation_to_check)), r'\1', augmented_evidence_text)
+            augmented_evidence_text = re.sub(r'\s*-\s*', '-', augmented_evidence_text)  # Handle hyphens
+            augmented_evidence_text = re.sub(r'([<\[({])\s+', r'\1', augmented_evidence_text)  # No space after '<', '[', '(', '{'
+
+            # Validate the final augmented evidence text
+            final_similarity_score = self.calculate_sentence_similarity(original_evidence_text, augmented_evidence_text)
+            if final_similarity_score >= self.min_sentence_similarity:
+                # Update the Evidence text directly in the input DataFrame
+                self.train_df.at[idx, 'Evidence'] = augmented_evidence_text
+                successful_augmentations += 1
+
+        # Log final statistics
+        logging.info(f"Augmentation completed. {successful_augmentations} sentences successfully augmented "
+                     f"out of {attempted_augmentations} attempts.")
+        logging.info(f"Total words augmented: {total_words_augmented}")
+        if attempted_augmentations > 0:
+            rate = (successful_augmentations / attempted_augmentations) * 100
+            logging.info(f"Success rate: {rate:.2f}%")
+        else:
+            logging.info("No augmentation attempts were made.")
+
+        return self.train_df
 
 
 def main():
@@ -610,5 +784,9 @@ def main():
     train_df = pd.read_csv(config.TRAIN_FILE)
 
     # Perform augmentation
-    synonym_replacer = AdvancedSynonymReplacer(params, train_df)
-    synonym_replacer.augment_data()
+    synonym_replacer = AdvancedSynonymReplacerDF(params, train_df)
+    synonym_replaced_df = synonym_replacer.augment_data()
+
+    # Save augmented data to CSV
+    logging.info(f"Saving augmented data to {output_path}")
+    synonym_replaced_df.to_csv(output_path, index=False)
