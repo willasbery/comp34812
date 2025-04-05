@@ -12,7 +12,7 @@ class BaseConfig:
     AUGMENTATION_CONFIG = {
         "0": {
             "replace": 0.0,
-            "add": 0.1, # 10%
+            "add": 0.001, # 10%
             "translate":{
                 "percentage": 0.8,
                 "split": {

@@ -113,76 +113,54 @@ class XorYAugmenter:
         return synonyms_to_return
     
     
-    def _augment(self, text: str, new_text: str) -> str | None:
+    def _augment(self, text: str) -> str | None:
         candidates = self._find_candidates(text)
-                
-        if len(candidates) == 0:
+        if not candidates:
             return None
-        
-        # Get the top max(num_words_to_augment, 3) candidates
-        candidates = candidates[:max(self.num_words_to_augment, 3)]
-        
-        # Get a number between 1 and num_words_to_augment
-        num_words_to_add = random.randint(1, self.num_words_to_augment)
-        
-        # Get the top num_words_to_add candidates
-        candidates = candidates[:num_words_to_add]
-        
+
+        # Determine the number of candidates to use
+        num_candidates = min(len(candidates), random.randint(1, self.num_words_to_augment))
+        candidates = candidates[:num_candidates]
+
         for candidate in candidates:
             similar_words = self._get_similar_word(candidate[0], candidate[1])
-            
-            if len(similar_words) == 0:
-                return None
-            
-            # Get a random number of words, from 1 to max_choices - 1
-            # We minus 1 because we already have the first choice (candidate[0])
-            num_words = random.randint(1, self.max_choices - 1)
-            
-            # Randomly select num_words similar words
-            similar_words = random.sample(similar_words, min(num_words, len(similar_words)))
-            # Add the original word to the list
+            if not similar_words:
+                continue
+
+            # Select a random number of similar words
+            num_words = min(len(similar_words), random.randint(1, self.max_choices - 1))
+            similar_words = random.sample(similar_words, num_words)
             similar_words.append(candidate[0])
-            # Randomly shuffle, just in case
             random.shuffle(similar_words)
-                    
-            new_text = new_text.replace(candidate[0], '/'.join(similar_words))
-            
-        return new_text
+
+            text = text.replace(candidate[0], '/'.join(similar_words))
+
+        return text
 
 
-    def augment_data(self, data: pd.DataFrame, augment_claim: bool = True, augment_evidence: bool = False) -> pd.DataFrame:
+    def augment_data(self, data: pd.DataFrame, augment_claim: bool = True, augment_evidence: bool = False) -> None:
         """
-        Augment the claims by adding a '/' between words
+        Augment the claims by adding a '/' between words in-place.
 
         Args:
-            claims (pd.DataFrame): The claims to augment
+            data (pd.DataFrame): The DataFrame containing claims to augment
 
         Returns:
-            pd.DataFrame: The augmented claims
+            None
         """
-        augmented_claims = []
-        
-        for _, row in tqdm(data.iterrows(), total=len(data), desc="Augmenting dataset"):
-            claim = row['Claim']
-            evidence = row['Evidence']
-            
-            new_claim = claim
-            new_evidence = evidence
-            
+        for index, row in tqdm(data.iterrows(), total=len(data), desc="Augmenting dataset"):
             if augment_claim:
-                new_claim = self._augment(claim, new_claim)
+                new_claim = self._augment(row['Claim'])
+                if new_claim:
+                    data.at[index, 'Claim'] = new_claim
             
             if augment_evidence:
-                new_evidence = self._augment(evidence, new_evidence)
-            
-            augmented_claims.append({
-                "Claim": new_claim,
-                "Evidence": new_evidence,
-                "label": row['label']
-            })
-                
-        return pd.DataFrame(augmented_claims)
-                
+                new_evidence = self._augment(row['Evidence'])
+                if new_evidence:
+                    data.at[index, 'Evidence'] = new_evidence
+        
+        # No return statement needed as the DataFrame is modified in-place.
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -221,9 +199,9 @@ def main():
     
     augmenter = XorYAugmenter(train_df, args.similarity_threshold, args.max_choices, args.num_words_to_augment)
     
-    augmented_df = augmenter.augment_claims(train_df)
+    augmenter.augment_data(train_df)
     
-    augmented_df.to_csv(output_path, index=False)
+    train_df.to_csv(output_path, index=False)
     
 
     

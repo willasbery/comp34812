@@ -118,7 +118,7 @@ def synonym_replace_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFrame:
         "min_word_length": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["min_word_length"],
         "word_frequency_threshold": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["word_frequency_threshold"],
         "synonym_selection_strategy": "random",
-        "word_frequency_threshold": 3,
+        "word_frequency_threshold": 1,
         "enable_random_synonym_insertion": True,
         "synonym_insertion_probability": 0.05,
         "enable_random_word_insertion": True,
@@ -149,29 +149,34 @@ def x_or_y_augment_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFrame:
         pd.DataFrame: The augmented dataframe
     """
     percentage_to_augment = config.AUGMENTATION_CONFIG[label]["x_or_y"]["percentage"]
-    all_samples = aug_df.sample(frac=percentage_to_augment)
-    
+    samples = aug_df.sample(frac=percentage_to_augment)
+
+    splits = config.AUGMENTATION_CONFIG[label]["x_or_y"]["split"]
+    claim_count = int(len(samples) * splits["Claim"])
+    evidence_count = int(len(samples) * splits["Evidence"])
+
+    split_samples = {
+        "Claim": samples.iloc[:claim_count],
+        "Evidence": samples.iloc[claim_count: claim_count + evidence_count],
+        "Both": samples.iloc[claim_count + evidence_count:]
+    }
+
     max_choices = config.AUGMENTATION_CONFIG[label]["x_or_y"]["max_choices"]
     claim_num_words_to_augment = config.AUGMENTATION_CONFIG[label]["x_or_y"]["num_words_to_augment"]["Claim"]
     evidence_num_words_to_augment = config.AUGMENTATION_CONFIG[label]["x_or_y"]["num_words_to_augment"]["Evidence"]
-    
-    claim_samples = all_samples.sample(frac=config.AUGMENTATION_CONFIG[label]["x_or_y"]["split"]["Claim"])
-    evidence_samples = all_samples.sample(frac=config.AUGMENTATION_CONFIG[label]["x_or_y"]["split"]["Evidence"])
-    both_samples = all_samples.sample(frac=config.AUGMENTATION_CONFIG[label]["x_or_y"]["split"]["Both"])
-    
-    claim_augmenter = XorYAugmenter(claim_samples, max_choices=max_choices, num_words_to_augment=claim_num_words_to_augment)
-    claim_augmented = claim_augmenter.augment_data(claim_samples, augment_claim=True, augment_evidence=False)
-    
-    evidence_augmenter = XorYAugmenter(evidence_samples, max_choices=max_choices, num_words_to_augment=evidence_num_words_to_augment)
-    evidence_augmented = evidence_augmenter.augment_data(evidence_samples, augment_claim=False, augment_evidence=True)
-    
-    # Crappy work around for the num words to augment but I can't be bothered adding two separate params for it
-    both_augmenter = XorYAugmenter(both_samples, max_choices=max_choices, num_words_to_augment=min(claim_num_words_to_augment, evidence_num_words_to_augment))
-    both_augmented = both_augmenter.augment_data(both_samples, augment_claim=True, augment_evidence=True)
-    
-    augmented_samples = pd.concat([claim_augmented, evidence_augmented, both_augmented])
-    
-    aug_df.update(augmented_samples)
+
+    for text_type, sample in split_samples.items():
+        if text_type == "Claim":
+            augmenter = XorYAugmenter(sample, max_choices=max_choices, num_words_to_augment=claim_num_words_to_augment)
+            augmenter.augment_data(sample, augment_claim=True, augment_evidence=False)
+        elif text_type == "Evidence":
+            augmenter = XorYAugmenter(sample, max_choices=max_choices, num_words_to_augment=evidence_num_words_to_augment)
+            augmenter.augment_data(sample, augment_claim=False, augment_evidence=True)
+        elif text_type == "Both":
+            augmenter = XorYAugmenter(sample, max_choices=max_choices, num_words_to_augment=min(claim_num_words_to_augment, evidence_num_words_to_augment))
+            augmenter.augment_data(sample, augment_claim=True, augment_evidence=True)
+
+    aug_df.update(samples)
     return aug_df
 
 
@@ -204,15 +209,15 @@ async def main():
     ones_to_add_df = aug_df.iloc[ones_to_add_indices].reset_index(drop=True).copy()
     zeros_to_add_df = aug_df.iloc[zeros_to_add_indices].reset_index(drop=True).copy()
 
-    # back translation
-    # await back_translate_samples(zeros_to_add_df, "0")
-    # await back_translate_samples(ones_to_add_df, "1")
     print(zeros_to_add_df)
+
+    # back translation
+    await back_translate_samples(zeros_to_add_df, "0")
+    # await back_translate_samples(ones_to_add_df, "1")
+
     # synonym replacement
     synonym_replace_samples(zeros_to_add_df, "0")
-    ones_augmented = synonym_replace_samples(ones_to_add_df, "1")
-    
-    print(zeros_to_add_df)
+    #synonym_replace_samples(ones_to_add_df, "1")
 
     # x or y augmentation
     x_or_y_augment_samples(zeros_to_add_df, "0")
