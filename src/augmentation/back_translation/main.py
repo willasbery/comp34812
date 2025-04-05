@@ -43,14 +43,20 @@ async def back_translate(text: str, src='en', intermediate='fr') -> str:
             dest=src
         )
         return back_to_english.text
-    
+
 async def back_translate_batch(data: pd.DataFrame, column: str, src='en', intermediate='fr') -> pd.DataFrame:
     async with Translator() as translator:
         # Apply translation to each element in the specified column
         async def translate_text(text):
-            translation = await translator.translate(text, src=src, dest=intermediate)
-            back_to_english = await translator.translate(translation.text, src=intermediate, dest=src)
-            return back_to_english.text
+            for attempt in range(3):
+                try:
+                    translation = await translator.translate(text, src=src, dest=intermediate)
+                    back_to_english = await translator.translate(translation.text, src=intermediate, dest=src)
+                    return back_to_english.text
+                except Exception as e:
+                    logging.warning(f"Attempt {attempt + 1} failed: {e}")
+                    await asyncio.sleep(0.5)
+            return text
         
         # Apply the translation function to the DataFrame column
         if column == "Both":
