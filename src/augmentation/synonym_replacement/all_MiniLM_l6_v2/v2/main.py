@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import random
 import re
+import string
 from collections import defaultdict, Counter
 from pathlib import Path
 from tqdm import tqdm
@@ -456,6 +457,13 @@ class AdvancedSynonymReplacer:
                 augmented_evidence_text = current_evidence
             else:
                 augmented_evidence_text = " ".join(augmented_evidence_tokens)
+                
+            # Remove spaces around hyphens and ensure no space after '<', '[', '(', '{'
+            excluded_punctuation = "<([{"
+            punctuation_to_check = ''.join(c for c in string.punctuation if c not in excluded_punctuation)
+            augmented_evidence_text = re.sub(r'\s+([{}])'.format(re.escape(punctuation_to_check)), r'\1', augmented_evidence_text)
+            augmented_evidence_text = re.sub(r'\s*-\s*', '-', augmented_evidence_text)  # Handle hyphens
+            augmented_evidence_text = re.sub(r'([<\[({])\s+', r'\1', augmented_evidence_text)  # No space after '<', '[', '(', '{'
 
             # Validate the final augmented evidence text
             final_similarity_score = self.calculate_sentence_similarity(original_evidence_text, augmented_evidence_text)
@@ -618,6 +626,13 @@ class AdvancedSynonymReplacerDF(AdvancedSynonymReplacer):
                 augmented_evidence_text = current_evidence
             else:
                 augmented_evidence_text = " ".join(augmented_evidence_tokens)
+
+            # Remove spaces around hyphens and ensure no space after '<', '[', '(', '{'
+            excluded_punctuation = "<([{"
+            punctuation_to_check = ''.join(c for c in string.punctuation if c not in excluded_punctuation)
+            augmented_evidence_text = re.sub(r'\s+([{}])'.format(re.escape(punctuation_to_check)), r'\1', augmented_evidence_text)
+            augmented_evidence_text = re.sub(r'\s*-\s*', '-', augmented_evidence_text)  # Handle hyphens
+            augmented_evidence_text = re.sub(r'([<\[({])\s+', r'\1', augmented_evidence_text)  # No space after '<', '[', '(', '{'
 
             # Validate the final augmented evidence text
             final_similarity_score = self.calculate_sentence_similarity(original_evidence_text, augmented_evidence_text)

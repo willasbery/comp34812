@@ -209,8 +209,6 @@ async def main():
     ones_to_add_df = aug_df.iloc[ones_to_add_indices].reset_index(drop=True).copy()
     zeros_to_add_df = aug_df.iloc[zeros_to_add_indices].reset_index(drop=True).copy()
 
-    print(zeros_to_add_df)
-
     # back translation
     await back_translate_samples(zeros_to_add_df, "0")
     # await back_translate_samples(ones_to_add_df, "1")
@@ -223,9 +221,7 @@ async def main():
     x_or_y_augment_samples(zeros_to_add_df, "0")
     # ones_augmented = x_or_y_augment_samples(ones_to_add_df, "1")
     
-    print(zeros_to_add_df)
 
-    # synonym addition
+    aug_df = pd.concat([aug_df, zeros_to_add_df, ones_to_add_df])
 
-    # easy data augmentation
-
+    aug_df.to_csv(aug_path, index=False)
