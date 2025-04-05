@@ -118,7 +118,6 @@ def synonym_replace_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFrame:
         "min_word_length": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["min_word_length"],
         "word_frequency_threshold": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["word_frequency_threshold"],
         "synonym_selection_strategy": "random",
-        "word_frequency_threshold": 1,
         "enable_random_synonym_insertion": True,
         "synonym_insertion_probability": 0.05,
         "enable_random_word_insertion": True,
@@ -211,16 +210,15 @@ async def main():
 
     # back translation
     await back_translate_samples(zeros_to_add_df, "0")
-    # await back_translate_samples(ones_to_add_df, "1")
+    await back_translate_samples(ones_to_add_df, "1")
 
     # synonym replacement
     synonym_replace_samples(zeros_to_add_df, "0")
-    #synonym_replace_samples(ones_to_add_df, "1")
+    synonym_replace_samples(ones_to_add_df, "1")
 
     # x or y augmentation
     x_or_y_augment_samples(zeros_to_add_df, "0")
-    # ones_augmented = x_or_y_augment_samples(ones_to_add_df, "1")
-    
+    x_or_y_augment_samples(ones_to_add_df, "1")    
 
     aug_df = pd.concat([aug_df, zeros_to_add_df, ones_to_add_df])
 

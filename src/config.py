@@ -12,7 +12,7 @@ class BaseConfig:
     AUGMENTATION_CONFIG = {
         "0": {
             "replace": 0.0,
-            "add": 0.001, # 10%
+            "add": 0.1, # 10%
             "translate":{
                 "percentage": 0.8,
                 "split": {
@@ -32,7 +32,7 @@ class BaseConfig:
                 "replacement_fraction": 0.3,
                 "min_similarity": 0.85,
                 "min_word_length": 4,
-                "word_frequency_threshold": 1,
+                "word_frequency_threshold": 3,
                 "split": {
                     "Claim": 0.15,
                     "Evidence": 0.7,
@@ -48,7 +48,7 @@ class BaseConfig:
                 }
             },
             "x_or_y": {
-                "percentage": 0.3,
+                "percentage": 0.15,
                 "max_choices": 4,
                 "num_words_to_augment": {
                     "Claim": 1,
