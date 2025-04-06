@@ -4,6 +4,7 @@ import psutil
 import time
 import string
 from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
 from contextlib import contextmanager
 from sklearn.metrics import (
     accuracy_score,
@@ -21,8 +22,8 @@ def get_device() -> torch.device:
     else:
         return torch.device('cpu')
 
-def prepare_svm_data(train_df, dev_df, remove_stopwords: bool = True) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
-    """Prepare data for SVM training by concatenating claim and evidence, converting text to lowercase, removing punctuation, normalizing whitespace, and optionally removing stopwords to maximize SVM performance."""
+def prepare_svm_data(train_df, dev_df, remove_stopwords: bool = True, lemmatize: bool = True) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
+    """Prepare data for SVM training by concatenating claim and evidence, converting text to lowercase, removing punctuation, normalizing whitespace, optionally removing stopwords, and optionally lemmatizing tokens to maximize SVM performance."""
     translator = str.maketrans('', '', string.punctuation)
 
     def clean_text(text: str) -> str:
@@ -34,6 +35,14 @@ def prepare_svm_data(train_df, dev_df, remove_stopwords: bool = True) -> tuple[p
             try:
                 stopwords_set = set(stopwords.words("english"))
                 text = " ".join([word for word in text.split() if word not in stopwords_set])
+            except Exception:
+                pass
+        # Optionally perform lemmatization
+        if lemmatize:
+            try:
+                lemmatizer = WordNetLemmatizer()
+                words = text.split()
+                text = " ".join([lemmatizer.lemmatize(word) for word in words])
             except Exception:
                 pass
         return text
