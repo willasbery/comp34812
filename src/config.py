@@ -28,7 +28,7 @@ class BaseConfig:
                 }
             },
             "synonym_replacement": {
-                "percentage": 0.8,
+                "percentage": 0.7,
                 "replacement_fraction": 0.3,
                 "min_similarity": 0.85,
                 "min_word_length": 4,
@@ -63,7 +63,7 @@ class BaseConfig:
         },
         "1": {
             "replace": 0.0,
-            "add": 2.0,
+            "add": 1.0,
             "translate":{
                 "percentage": 0.8,
                 "split": {
@@ -79,7 +79,7 @@ class BaseConfig:
                 }
             },
             "synonym_replacement": {
-                "percentage": 0.8,
+                "percentage": 0.7,
                 "replacement_fraction": 0.3,
                 "min_similarity": 0.85,
                 "min_word_length": 4,

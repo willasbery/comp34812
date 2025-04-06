@@ -119,11 +119,11 @@ def synonym_replace_samples(aug_df: pd.DataFrame, label: str) -> pd.DataFrame:
         "word_frequency_threshold": config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["word_frequency_threshold"],
         "synonym_selection_strategy": "random",
         "enable_random_synonym_insertion": True,
-        "synonym_insertion_probability": 0.05,
+        "synonym_insertion_probability": 0.03,
         "enable_random_word_insertion": True,
-        "word_insertion_probability": 0.05,
+        "word_insertion_probability": 0.01,
         "enable_random_deletion": True,
-        "deletion_probability": 0.05
+        "deletion_probability": 0.01
     }
     percentage_to_translate = config.AUGMENTATION_CONFIG[label]["synonym_replacement"]["percentage"]
     samples = aug_df.sample(frac=percentage_to_translate)
