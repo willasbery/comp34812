@@ -83,6 +83,7 @@ class BaseConfig:
                 "replacement_fraction": 0.3,
                 "min_similarity": 0.85,
                 "min_word_length": 4,
+                "word_frequency_threshold": 3,
                 "split": {
                     "Claim": 0.15,
                     "Evidence": 0.7,
@@ -90,7 +91,7 @@ class BaseConfig:
                 }
             },
             "easy_data_augmentation": {
-                "percentage": 0.2,
+                "percentage": 0.8,
                 "split": {
                     "Claim": 0.1,
                     "Evidence": 0.9,
@@ -98,11 +99,11 @@ class BaseConfig:
                 }
             },
             "x_or_y": {
-                "percentage": 0.7,
+                "percentage": 0.15,
                 "max_choices": 4,
                 "num_words_to_augment": {
                     "Claim": 1,
-                    "Evidence": 1
+                    "Evidence": 2
                 },
                 "split": {
                     "Claim": 0.90,
