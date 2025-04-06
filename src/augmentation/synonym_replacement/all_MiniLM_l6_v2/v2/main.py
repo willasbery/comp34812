@@ -458,12 +458,19 @@ class AdvancedSynonymReplacer:
             else:
                 augmented_evidence_text = " ".join(augmented_evidence_tokens)
                 
-            # Remove spaces around hyphens and ensure no space after '<', '[', '(', '{'
-            excluded_punctuation = "<([{"
-            punctuation_to_check = ''.join(c for c in string.punctuation if c not in excluded_punctuation)
-            augmented_evidence_text = re.sub(r'\s+([{}])'.format(re.escape(punctuation_to_check)), r'\1', augmented_evidence_text)
+            # Robust punctuation spacing adjustments
+            augmented_evidence_text = augmented_evidence_text.strip()
+            # Ensure symbols like '$' and '£' have a space before them if not at the start
+            augmented_evidence_text = re.sub(r'(?<!\s)([$£])', r' \1', augmented_evidence_text)
+            # Ensure hyphens are attached with no spaces around them
             augmented_evidence_text = re.sub(r'\s*-\s*', '-', augmented_evidence_text)  # Handle hyphens
-            augmented_evidence_text = re.sub(r'([<\[({])\s+', r'\1', augmented_evidence_text)  # No space after '<', '[', '(', '{'
+            # Remove extra spaces before punctuation like commas, periods, colons, semicolons, exclamation and question marks
+            augmented_evidence_text = re.sub(r'\s+([,.;?!])', r'\1', augmented_evidence_text)
+            # Adjust spacing around quotes: add space before opening quotes if missing, and remove extra space after closing quotes
+            augmented_evidence_text = re.sub(r'(?<!\s)(["\"])', r' \1', augmented_evidence_text)
+            augmented_evidence_text = re.sub(r'(["\"])(\s+)', r'\1', augmented_evidence_text)
+            # Collapse multiple spaces into one
+            augmented_evidence_text = re.sub(r'\s{2,}', ' ', augmented_evidence_text)
 
             # Validate the final augmented evidence text
             final_similarity_score = self.calculate_sentence_similarity(original_evidence_text, augmented_evidence_text)
@@ -627,12 +634,19 @@ class AdvancedSynonymReplacerDF(AdvancedSynonymReplacer):
             else:
                 augmented_evidence_text = " ".join(augmented_evidence_tokens)
 
-            # Remove spaces around hyphens and ensure no space after '<', '[', '(', '{'
-            excluded_punctuation = "<([{"
-            punctuation_to_check = ''.join(c for c in string.punctuation if c not in excluded_punctuation)
-            augmented_evidence_text = re.sub(r'\s+([{}])'.format(re.escape(punctuation_to_check)), r'\1', augmented_evidence_text)
+            # Robust punctuation spacing adjustments
+            augmented_evidence_text = augmented_evidence_text.strip()
+            # Ensure symbols like '$' and '£' have a space before them if not at the start
+            augmented_evidence_text = re.sub(r'(?<!\s)([$£])', r' \1', augmented_evidence_text)
+            # Ensure hyphens are attached with no spaces around them
             augmented_evidence_text = re.sub(r'\s*-\s*', '-', augmented_evidence_text)  # Handle hyphens
-            augmented_evidence_text = re.sub(r'([<\[({])\s+', r'\1', augmented_evidence_text)  # No space after '<', '[', '(', '{'
+            # Remove extra spaces before punctuation like commas, periods, colons, semicolons, exclamation and question marks
+            augmented_evidence_text = re.sub(r'\s+([,.;?!])', r'\1', augmented_evidence_text)
+            # Adjust spacing around quotes: add space before opening quotes if missing, and remove extra space after closing quotes
+            augmented_evidence_text = re.sub(r'(?<!\s)(["\"])', r' \1', augmented_evidence_text)
+            augmented_evidence_text = re.sub(r'(["\"])(\s+)', r'\1', augmented_evidence_text)
+            # Collapse multiple spaces into one
+            augmented_evidence_text = re.sub(r'\s{2,}', ' ', augmented_evidence_text)
 
             # Validate the final augmented evidence text
             final_similarity_score = self.calculate_sentence_similarity(original_evidence_text, augmented_evidence_text)
