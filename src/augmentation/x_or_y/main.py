@@ -68,7 +68,8 @@ class XorYAugmenter:
             'JJ': wordnet.ADJ,
             'NN': wordnet.NOUN,
             'VB': wordnet.VERB,
-            'RB': wordnet.ADV
+            'RB': wordnet.ADV,
+            'MD': wordnet.VERB
         }
         return tag_map.get(nltk_tag[:2], wordnet.NOUN)
         
