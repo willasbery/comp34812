@@ -2,6 +2,9 @@ import pandas as pd # Much faster than pandas
 import numpy as np
 import psutil
 import time
+import string
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
 from contextlib import contextmanager
 from sklearn.metrics import (
     accuracy_score,
@@ -19,22 +22,39 @@ def get_device() -> torch.device:
     else:
         return torch.device('cpu')
 
-def prepare_data(train_df, aug_train_df, dev_df) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
-    """Prepare data for XGBoost training."""
-    # Combine claim and evidence into a single text feature for TF-IDF
-    train_df['text'] = train_df['Claim'] + " [SEP] " + train_df['Evidence']
-    aug_train_df['text'] = aug_train_df['Claim'] + " [SEP] " + aug_train_df['Evidence']
-    dev_df['text'] = dev_df['Claim'] + " [SEP] " + dev_df['Evidence']
-    
+def prepare_svm_data(train_df, dev_df, remove_stopwords: bool = True, lemmatize: bool = True) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
+    """Prepare data for SVM training by concatenating claim and evidence, converting text to lowercase, removing punctuation, normalizing whitespace, optionally removing stopwords, and optionally lemmatizing tokens to maximize SVM performance."""
+    translator = str.maketrans('', '', string.punctuation)
+
+    def clean_text(text: str) -> str:
+        text = text.lower().translate(translator)
+        # Normalize whitespace
+        text = " ".join(text.split())
+        # Optionally remove stopwords
+        if remove_stopwords:
+            try:
+                stopwords_set = set(stopwords.words("english"))
+                text = " ".join([word for word in text.split() if word not in stopwords_set])
+            except Exception:
+                pass
+        # Optionally perform lemmatization
+        if lemmatize:
+            try:
+                lemmatizer = WordNetLemmatizer()
+                words = text.split()
+                text = " ".join([lemmatizer.lemmatize(word) for word in words])
+            except Exception:
+                pass
+        return text
+
+    # Combine claim and evidence into a single text feature and clean the text
+    train_df['text'] = ("Claim: " + train_df['Claim'].apply(clean_text) + " [SEP] " + "Evidence: " + train_df['Evidence'].apply(clean_text))
+    dev_df['text'] = ("Claim: " + dev_df['Claim'].apply(clean_text) + " [SEP] " + "Evidence: " + dev_df['Evidence'].apply(clean_text))
+
     # Extract labels
     train_labels = train_df['label'].values
-    aug_train_labels = aug_train_df['label'].values
     dev_labels = dev_df['label'].values
-    
-    # Combine the augmented training data with the original training data
-    train_df = pd.concat([train_df, aug_train_df])
-    train_labels = np.concatenate([train_labels, aug_train_labels])
-    
+
     return train_df, dev_df, train_labels, dev_labels
 
 def calculate_all_metrics(y_true, y_pred):
