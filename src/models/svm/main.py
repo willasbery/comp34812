@@ -31,7 +31,7 @@ from src.utils.utils import (
     calculate_all_metrics,
     get_device,
     get_memory_usage,
-    prepare_data,
+    prepare_svm_data,
     timer
 )
 
@@ -46,12 +46,11 @@ initial_memory = get_memory_usage()
 logger.info(f"Initial memory usage: {initial_memory:.2f} MB")
 
 # Load and prepare data
-train_df = pd.read_csv(config.TRAIN_FILE)
+train_df = pd.read_csv(config.AUG_TRAIN_FILE)
 dev_df = pd.read_csv(config.DEV_FILE)
-train_aug_df = pd.read_csv(config.AUG_TRAIN_FILE)
 
 with timer("Data preparation", logger):
-    train_df, dev_df, train_labels, dev_labels = prepare_data(train_df, train_aug_df, dev_df)
+    train_df, dev_df, train_labels, dev_labels = prepare_svm_data(train_df, dev_df)
     logger.info(f"Prepared data: {len(train_df)} training samples, {len(dev_df)} validation samples")
     logger.info(f"Memory after data prep: {get_memory_usage():.2f} MB (+ {get_memory_usage() - initial_memory:.2f} MB)")
 
@@ -75,14 +74,14 @@ def objective(trial: optuna.Trial) -> float:
     # Hyperparameter suggestions
     params = {
         "C": trial.suggest_float("C", 0.01, 100.0, log=True),
-        "kernel": trial.suggest_categorical("kernel", ["linear", "rbf", "poly", "sigmoid"]),
-        "gamma": trial.suggest_categorical("gamma", ["scale", "auto"]) 
+        "kernel": trial.suggest_categorical("kernel", ["rbf"]),
+        "gamma": trial.suggest_categorical("gamma", ["auto"]) 
                 if trial.params["kernel"] in ["rbf", "poly", "sigmoid"] else "scale",
         "degree": trial.suggest_int("degree", 2, 5) 
                  if trial.params["kernel"] == "poly" else 3,
-        "use_feature_selection": trial.suggest_categorical("use_feature_selection", [True, False]),
+        "use_feature_selection": trial.suggest_categorical("use_feature_selection", [False]), # Feature selection hasn't been beneficial
         "class_weight": trial.suggest_categorical("class_weight", ["balanced", None]),
-        "use_tfidf_weighting": trial.suggest_categorical("use_tfidf_weighting", [True, False])
+        "use_tfidf_weighting": trial.suggest_categorical("use_tfidf_weighting", [True]) # TF-IDF weighting has been beneficial
     }
     
     if params["use_feature_selection"]:
@@ -204,7 +203,7 @@ def main() -> None:
     
     try:
         with timer("Hyperparameter optimization", logger):
-            study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=5)
+            study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=3)
     except KeyboardInterrupt:
         logger.warning("Hyperparameter tuning interrupted by user.")
     
