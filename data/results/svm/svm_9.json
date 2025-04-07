@@ -1,3 +1,1 @@
-
-{"Accuracy": 0.7863651704353696, "Macro-P": 0.7328534020552565, "Macro-R": 0.7235679409990553, "Macro-F1": 0.7278414125937587, "W Macro-P": 0.7825348543828983, "W Macro-R": 0.7863651704353696, "W Macro-F1": 0.7841928912141745, "MCC": 0.4563268813125911, "C": 0.04812464417512225, "kernel": "rbf", "gamma": "auto", "use_feature_selection": false, "class_weight": null, "use_tfidf_weighting": false}
-
+{"Accuracy": 0.8255146810664866, "Macro-P": 0.7816702356181358, "Macro-R": 0.7856415669849652, "Macro-F1": 0.783602038324029, "W Macro-P": 0.8268112483248816, "W Macro-R": 0.8255146810664866, "W Macro-F1": 0.8261253714131942, "MCC": 0.5672979022523832, "C": 2.5837240315961636, "kernel": "rbf", "gamma": "auto", "degree": 3, "use_feature_selection": false, "class_weight": "balanced", "use_tfidf_weighting": true}

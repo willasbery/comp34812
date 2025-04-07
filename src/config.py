@@ -14,7 +14,7 @@ class BaseConfig:
             "replace": 0.0,
             "add": 0.1, # 10%
             "translate":{
-                "percentage": 0.8,
+                "percentage": 1.0,
                 "split": {
                     "Claim": 0.15,
                     "Evidence": 0.7,
@@ -48,7 +48,7 @@ class BaseConfig:
                 }
             },
             "x_or_y": {
-                "percentage": 0.15,
+                "percentage": 0.08,
                 "max_choices": 4,
                 "num_words_to_augment": {
                     "Claim": 1,
@@ -99,7 +99,7 @@ class BaseConfig:
                 }
             },
             "x_or_y": {
-                "percentage": 0.15,
+                "percentage": 0.02,
                 "max_choices": 4,
                 "num_words_to_augment": {
                     "Claim": 1,

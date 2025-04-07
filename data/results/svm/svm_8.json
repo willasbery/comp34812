@@ -1,3 +1,1 @@
-
-{"Accuracy": 0.7792777590280121, "Macro-P": 0.7337952961368251, "Macro-R": 0.76666415328409, "Macro-F1": 0.7441428404498951, "W Macro-P": 0.802722327528624, "W Macro-R": 0.7792777590280121, "W Macro-F1": 0.7864775374251672, "MCC": 0.499378912995451, "C": 0.5325925942045077, "kernel": "linear", "use_feature_selection": true, "feature_selection_method": "pca", "n_components": 0.8816323170970644, "class_weight": "balanced", "use_tfidf_weighting": true}
-
+{"Accuracy": 0.8261896726290922, "Macro-P": 0.7847052664673501, "Macro-R": 0.7731210805458498, "Macro-F1": 0.7784871959242498, "W Macro-P": 0.8231662821309694, "W Macro-R": 0.8261896726290922, "W Macro-F1": 0.8243856516918908, "MCC": 0.5577060516603948, "C": 2.616404159302265, "kernel": "rbf", "gamma": "auto", "degree": 3, "use_feature_selection": false, "class_weight": null, "use_tfidf_weighting": true}
