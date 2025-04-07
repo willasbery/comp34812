@@ -4,7 +4,7 @@ class BaseConfig:
     DATA_DIR = Path(__file__).parent.parent / "data"
     TRAIN_FILE = DATA_DIR / "train.csv"
     DEV_FILE = DATA_DIR / "dev.csv"
-    AUG_TRAIN_FILE = DATA_DIR / "train_augmented.csv"
+    AUG_TRAIN_FILE = DATA_DIR / "train_augmented_3.csv"
     SAVE_DIR = DATA_DIR / "results"
     CACHE_DIR = Path(__file__).parent.parent / "cache"
 
@@ -28,7 +28,7 @@ class BaseConfig:
                 }
             },
             "synonym_replacement": {
-                "percentage": 0.7,
+                "percentage": 0.0,
                 "replacement_fraction": 0.3,
                 "min_similarity": 0.85,
                 "min_word_length": 4,
@@ -40,7 +40,7 @@ class BaseConfig:
                 }
             },
             "easy_data_augmentation": {
-                "percentage": 0.8,
+                "percentage": 0.0,
                 "split": {
                     "Claim": 0.1,
                     "Evidence": 0.9,
@@ -48,7 +48,7 @@ class BaseConfig:
                 }
             },
             "x_or_y": {
-                "percentage": 0.08,
+                "percentage": 0.00,
                 "max_choices": 4,
                 "num_words_to_augment": {
                     "Claim": 1,
@@ -65,7 +65,7 @@ class BaseConfig:
             "replace": 0.0,
             "add": 1.0,
             "translate":{
-                "percentage": 0.8,
+                "percentage": 1.0,
                 "split": {
                     "Claim": 0.15,
                     "Evidence": 0.7,
@@ -79,7 +79,7 @@ class BaseConfig:
                 }
             },
             "synonym_replacement": {
-                "percentage": 0.7,
+                "percentage": 0.0,
                 "replacement_fraction": 0.3,
                 "min_similarity": 0.85,
                 "min_word_length": 4,
@@ -91,7 +91,7 @@ class BaseConfig:
                 }
             },
             "easy_data_augmentation": {
-                "percentage": 0.8,
+                "percentage": 0.0,
                 "split": {
                     "Claim": 0.1,
                     "Evidence": 0.9,
@@ -99,7 +99,7 @@ class BaseConfig:
                 }
             },
             "x_or_y": {
-                "percentage": 0.02,
+                "percentage": 0.00,
                 "max_choices": 4,
                 "num_words_to_augment": {
                     "Claim": 1,
