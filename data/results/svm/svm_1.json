@@ -1,1 +1,5 @@
+<<<<<<< Updated upstream
 {"Accuracy": 0.8130273371582856, "Macro-P": 0.7679238260969543, "Macro-R": 0.754610729203419, "Macro-F1": 0.760657228762565, "W Macro-P": 0.8091052927181698, "W Macro-R": 0.8130273371582856, "W Macro-F1": 0.8106468776857527, "MCC": 0.5223649327185566, "C": 39.59473533600205, "kernel": "poly", "gamma": "auto", "degree": 3, "use_feature_selection": false, "class_weight": "balanced", "use_tfidf_weighting": false}
+=======
+{"Accuracy": 0.8277084036449545, "Macro-P": 0.7863457677074699, "Macro-R": 0.7764296404629936, "Macro-F1": 0.7810764174772664, "W Macro-P": 0.8251012686602262, "W Macro-R": 0.8277084036449545, "W Macro-F1": 0.8261909459597903, "MCC": 0.5626880400914018, "C": 2.5440035348888768, "kernel": "rbf", "gamma": "auto", "degree": 3, "use_feature_selection": false, "class_weight": null, "use_tfidf_weighting": true}
+>>>>>>> Stashed changes

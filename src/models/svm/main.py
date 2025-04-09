@@ -73,7 +73,7 @@ def objective(trial: optuna.Trial) -> float:
     
     # Hyperparameter suggestions
     params = {
-        "C": trial.suggest_float("C", 0.01, 100.0, log=True),
+        "C": trial.suggest_float("C", 0.1, 10.0, log=True),
         "kernel": trial.suggest_categorical("kernel", ["rbf"]),
         "gamma": trial.suggest_categorical("gamma", ["auto"]) 
                 if trial.params["kernel"] in ["rbf", "poly", "sigmoid"] else "scale",
@@ -203,7 +203,7 @@ def main() -> None:
     
     try:
         with timer("Hyperparameter optimization", logger):
-            study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=3)
+            study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=5)
     except KeyboardInterrupt:
         logger.warning("Hyperparameter tuning interrupted by user.")
     
