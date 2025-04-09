@@ -50,7 +50,7 @@ train_df = pd.read_csv(config.AUG_TRAIN_FILE)
 dev_df = pd.read_csv(config.DEV_FILE)
 
 with timer("Data preparation", logger):
-    train_df, dev_df, train_labels, dev_labels = prepare_svm_data(train_df, dev_df)
+    train_df, dev_df, train_labels, dev_labels = prepare_svm_data(train_df, dev_df, remove_stopwords=True, lemmatize=True, min_freq=2, vocab_size=10000)
     logger.info(f"Prepared data: {len(train_df)} training samples, {len(dev_df)} validation samples")
     logger.info(f"Memory after data prep: {get_memory_usage():.2f} MB (+ {get_memory_usage() - initial_memory:.2f} MB)")
 
