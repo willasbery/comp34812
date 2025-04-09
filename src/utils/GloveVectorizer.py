@@ -53,7 +53,7 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         tfidf_vectorizer (TfidfVectorizer): TF-IDF vectorizer for word weighting
     """
     
-    def __init__(self, sep_token: str = '[SEP]', use_tfidf_weighting=True):
+    def __init__(self, sep_token: str = '[SEP]', use_tfidf_weighting=True, vocabulary=None, embedding_dim=300):
         """Initialize the GloveVectorizer.
         
         Args:
@@ -61,12 +61,19 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
                                      Defaults to '[SEP]'.
             use_tfidf_weighting (bool, optional): Whether to use TF-IDF weights 
                                                 for word embeddings. Defaults to True.
+            vocabulary (set, optional): Set of words to include in the vocabulary.
         """
         self.glove = glove_embeddings
-        self.vector_size = 300
+        self.vector_size = embedding_dim
         self.sep_token = sep_token
         self.use_tfidf_weighting = use_tfidf_weighting
-        self.tfidf_vectorizer = TfidfVectorizer(min_df=2, max_df=0.95) if use_tfidf_weighting else None
+        self.vocabulary = vocabulary or set()
+        self.tfidf_vectorizer = TfidfVectorizer(
+            min_df=2, 
+            max_df=0.95,
+            vocabulary=self.vocabulary,
+            max_features=len(self.vocabulary) if self.vocabulary else None
+        ) if use_tfidf_weighting else None
         
     @staticmethod
     def _pre_process(doc: str) -> str:
@@ -85,37 +92,30 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         return doc
     
     def _get_weighted_vector(self, text: str, tfidf_weights=None) -> np.ndarray:
-        """Compute weighted average of word vectors using TF-IDF weights.
-        
-        Args:
-            text (str): Input text to vectorize
-            tfidf_weights (dict, optional): Dictionary mapping words to their TF-IDF weights
-            
-        Returns:
-            np.ndarray: A vector of size self.vector_size representing the weighted average
-                       of word embeddings. If no words are found in GloVe, returns zero vector.
-        """
-        words = text.split()
+        """Compute weighted average using only vocabulary words"""
+        # Replace OOV words with UNK before processing
+        words = [word if word in self.vocabulary else '<UNK>' for word in text.split()]
         
         if not words:
             return np.zeros(self.vector_size)
             
+        # Restrict to vocabulary words
+        valid_words = [word for word in words if word in self.vocabulary]
+        
         if self.use_tfidf_weighting and tfidf_weights:
-            # Use TF-IDF weights when available
             vectors = []
             weights = []
-            
-            for word in words:
-                if word in self.glove and word in tfidf_weights:
+            for word in valid_words:
+                if word in self.glove:
                     vectors.append(self.glove[word])
-                    weights.append(tfidf_weights[word])
-                    
+                    weights.append(tfidf_weights.get(word, 1.0))  # Default weight=1 if not in TF-IDF
+            
             if vectors:
                 weights = np.array(weights) / np.sum(weights)  # Normalize weights
                 return np.average(vectors, axis=0, weights=weights)
         
         # Fallback to regular mean if no weights or no matching words
-        vectors = [self.glove[word] for word in words if word in self.glove]
+        vectors = [self.glove[word] for word in valid_words if word in self.glove]
         if vectors:
             return np.mean(vectors, axis=0)
             

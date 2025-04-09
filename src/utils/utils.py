@@ -24,7 +24,7 @@ def get_device() -> torch.device:
     else:
         return torch.device('cpu')
 
-def prepare_svm_data(train_df, dev_df, remove_stopwords: bool = True, lemmatize: bool = True, 
+def prepare_svm_data(data: pd.DataFrame, remove_stopwords: bool = True, lemmatize: bool = True, 
                     min_freq: int = 2, vocab_size: Optional[int] = None) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
     """Prepare data for SVM training with UNK replacement for rare words."""
     translator = str.maketrans('', '', string.punctuation)
@@ -59,7 +59,7 @@ def prepare_svm_data(train_df, dev_df, remove_stopwords: bool = True, lemmatize:
         return text
 
     # First pass to build vocabulary from training data
-    train_samples = pd.concat([train_df['Claim'], train_df['Evidence']]).apply(clean_text)
+    train_samples = pd.concat([data['Claim'], data['Evidence']]).apply(clean_text)
     all_words = [word for text in train_samples for word in text.split()]
     word_counts = Counter(all_words)
 
@@ -77,16 +77,13 @@ def prepare_svm_data(train_df, dev_df, remove_stopwords: bool = True, lemmatize:
         return ' '.join([word if word in vocab else '<UNK>' for word in text.split()])
 
     # Second pass with UNK replacement
-    train_df['text'] = ("Claim: " + train_df['Claim'].apply(clean_text).apply(replace_rare_words) + 
-                       " [SEP] " + "Evidence: " + train_df['Evidence'].apply(clean_text).apply(replace_rare_words))
-    dev_df['text'] = ("Claim: " + dev_df['Claim'].apply(clean_text).apply(replace_rare_words) + 
-                     " [SEP] " + "Evidence: " + dev_df['Evidence'].apply(clean_text).apply(replace_rare_words))
+    data['text'] = ("Claim: " + data['Claim'].apply(clean_text).apply(replace_rare_words) + 
+                       " [SEP] " + "Evidence: " + data['Evidence'].apply(clean_text).apply(replace_rare_words))
 
     # Extract labels
-    train_labels = train_df['label'].values
-    dev_labels = dev_df['label'].values
+    labels = data['label'].values
 
-    return train_df, dev_df, train_labels, dev_labels
+    return data, labels, vocab
 
 def calculate_all_metrics(y_true, y_pred):
     """
