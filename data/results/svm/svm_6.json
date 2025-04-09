@@ -1,5 +1,9 @@
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 {"Accuracy": 0.7691528855889301, "Macro-P": 0.7156832459676992, "Macro-R": 0.7312435268543073, "Macro-F1": 0.7221200294841588, "W Macro-P": 0.779127491007061, "W Macro-R": 0.7691528855889301, "W Macro-F1": 0.7731655328694029, "MCC": 0.44665581595208537, "C": 13.731383976335538, "kernel": "rbf", "gamma": "auto", "use_feature_selection": true, "feature_selection_method": "kbest", "k_best": 19, "class_weight": null, "use_tfidf_weighting": false}
+=======
+{"Accuracy": 0.7897401282483969, "Macro-P": 0.7486761277321952, "Macro-R": 0.7898956329740618, "Macro-F1": 0.7599369160248877, "W Macro-P": 0.8196926933308029, "W Macro-R": 0.7897401282483969, "W Macro-F1": 0.7977047797908864, "MCC": 0.5369920798464848, "C": 0.30580963650482534, "kernel": "rbf", "gamma": "auto", "degree": 3, "use_feature_selection": false, "class_weight": "balanced", "use_tfidf_weighting": true}
+>>>>>>> Stashed changes
 =======
 {"Accuracy": 0.7897401282483969, "Macro-P": 0.7486761277321952, "Macro-R": 0.7898956329740618, "Macro-F1": 0.7599369160248877, "W Macro-P": 0.8196926933308029, "W Macro-R": 0.7897401282483969, "W Macro-F1": 0.7977047797908864, "MCC": 0.5369920798464848, "C": 0.30580963650482534, "kernel": "rbf", "gamma": "auto", "degree": 3, "use_feature_selection": false, "class_weight": "balanced", "use_tfidf_weighting": true}
 >>>>>>> Stashed changes
