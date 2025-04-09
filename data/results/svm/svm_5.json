@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
 {"Accuracy": 0.8207897401282483, "Macro-P": 0.7788217650435503, "Macro-R": 0.761482791391143, "Macro-F1": 0.7691869280846315, "W Macro-P": 0.8163630977258056, "W Macro-R": 0.8207897401282483, "W Macro-F1": 0.8179167784298886, "MCC": 0.5400262713023986, "C": 28.582324427559602, "kernel": "rbf", "gamma": "scale", "use_feature_selection": false, "class_weight": "balanced", "use_tfidf_weighting": true}
@@ -7,3 +8,6 @@
 =======
 {"Accuracy": 0.8255146810664866, "Macro-P": 0.7824388194245523, "Macro-R": 0.7794303347256525, "Macro-F1": 0.7809046311393346, "W Macro-P": 0.8246219170946332, "W Macro-R": 0.8255146810664866, "W Macro-F1": 0.8250475601248412, "MCC": 0.5618610997437739, "C": 3.3687969540756377, "kernel": "rbf", "gamma": "auto", "degree": 3, "use_feature_selection": false, "class_weight": "balanced", "use_tfidf_weighting": true}
 >>>>>>> Stashed changes
+=======
+{"Accuracy": 0.7809652379345258, "Macro-P": 0.7270662524977005, "Macro-R": 0.6955545849788876, "Macro-F1": 0.7072277031759082, "W Macro-P": 0.7702572626327217, "W Macro-R": 0.7809652379345258, "W Macro-F1": 0.7728327862193858, "MCC": 0.42144440568074515, "C": 0.13777577763461538, "kernel": "rbf", "class_weight": null, "gamma": "auto"}
+>>>>>>> 56a0bde6ff3c5ff3846df0e6b8d35aef86fdbe6c

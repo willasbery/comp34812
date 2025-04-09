@@ -12,6 +12,8 @@ from sklearn.metrics import (
     matthews_corrcoef
 )
 import torch
+from collections import Counter
+from typing import Optional
 
 def get_device() -> torch.device:
     """Determine the device to use for computations."""
@@ -22,8 +24,9 @@ def get_device() -> torch.device:
     else:
         return torch.device('cpu')
 
-def prepare_svm_data(train_df, dev_df, remove_stopwords: bool = True, lemmatize: bool = True) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
-    """Prepare data for SVM training by concatenating claim and evidence, converting text to lowercase, removing punctuation, normalizing whitespace, optionally removing stopwords, and optionally lemmatizing tokens to maximize SVM performance."""
+def prepare_svm_data(data: pd.DataFrame, remove_stopwords: bool = True, lemmatize: bool = True, 
+                    min_freq: int = 2, vocab_size: Optional[int] = None) -> tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray]:
+    """Prepare data for SVM training with UNK replacement for rare words."""
     translator = str.maketrans('', '', string.punctuation)
 
     def clean_text(text: str) -> str:
@@ -33,8 +36,16 @@ def prepare_svm_data(train_df, dev_df, remove_stopwords: bool = True, lemmatize:
         # Optionally remove stopwords
         if remove_stopwords:
             try:
-                stopwords_set = set(stopwords.words("english"))
-                text = " ".join([word for word in text.split() if word not in stopwords_set])
+                # Keep important discourse markers and modal verbs
+                keep_words = {
+                    'because', 'since', 'therefore', 'hence', 'thus', 'although',
+                    'however', 'but', 'not', 'should', 'must', 'might', 'may',
+                    'could', 'would', 'against', 'between', 'before', 'after'
+                }
+                custom_stopwords = set(stopwords.words("english")) - keep_words
+                
+                text = " ".join([word for word in text.split() 
+                               if word not in custom_stopwords])
             except Exception:
                 pass
         # Optionally perform lemmatization
@@ -47,15 +58,32 @@ def prepare_svm_data(train_df, dev_df, remove_stopwords: bool = True, lemmatize:
                 pass
         return text
 
-    # Combine claim and evidence into a single text feature and clean the text
-    train_df['text'] = ("Claim: " + train_df['Claim'].apply(clean_text) + " [SEP] " + "Evidence: " + train_df['Evidence'].apply(clean_text))
-    dev_df['text'] = ("Claim: " + dev_df['Claim'].apply(clean_text) + " [SEP] " + "Evidence: " + dev_df['Evidence'].apply(clean_text))
+    # First pass to build vocabulary from training data
+    train_samples = pd.concat([data['Claim'], data['Evidence']]).apply(clean_text)
+    all_words = [word for text in train_samples for word in text.split()]
+    word_counts = Counter(all_words)
+
+    # Filter by minimum frequency and sort
+    filtered_words = [(word, count) for word, count in word_counts.items() if count >= min_freq]
+    sorted_words = sorted(filtered_words, key=lambda x: (-x[1], x[0]))  # Sort by frequency then alphabetically
+    
+    # Apply vocabulary size limit
+    if vocab_size is not None:
+        sorted_words = sorted_words[:vocab_size]
+    
+    vocab = {word for word, _ in sorted_words}
+
+    def replace_rare_words(text: str) -> str:
+        return ' '.join([word if word in vocab else '<UNK>' for word in text.split()])
+
+    # Second pass with UNK replacement
+    data['text'] = ("Claim: " + data['Claim'].apply(clean_text).apply(replace_rare_words) + 
+                       " [SEP] " + "Evidence: " + data['Evidence'].apply(clean_text).apply(replace_rare_words))
 
     # Extract labels
-    train_labels = train_df['label'].values
-    dev_labels = dev_df['label'].values
+    labels = data['label'].values
 
-    return train_df, dev_df, train_labels, dev_labels
+    return data, labels, vocab
 
 def calculate_all_metrics(y_true, y_pred):
     """
