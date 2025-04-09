@@ -79,12 +79,24 @@ def objective(trial: optuna.Trial) -> float:
     
     # Simplified hyperparameters for RBF Kernel SVM
     params = {
+<<<<<<< Updated upstream
         "C": trial.suggest_float("C", 0.1, 10.0, log=True), # Focused range around C=2
         "kernel": trial.suggest_categorical("kernel", ["linear", "rbf"]),
         "class_weight": trial.suggest_categorical("class_weight", [None, "balanced"]), # None worked best
         "vocab_size": trial.suggest_int("vocab_size", 500, 10000, step=500), # Tune vocab size,
         "embedding_dim": trial.suggest_int("embedding_dim", 100, 300, step=50), # Tune embedding dimension
         "use_tfidf_weighting": True # Fixed based on previous findings
+=======
+        "C": trial.suggest_float("C", 0.1, 10.0, log=True),
+        "kernel": trial.suggest_categorical("kernel", ["rbf"]),
+        "gamma": trial.suggest_categorical("gamma", ["auto"]) 
+                if trial.params["kernel"] in ["rbf", "poly", "sigmoid"] else "scale",
+        "degree": trial.suggest_int("degree", 2, 5) 
+                 if trial.params["kernel"] == "poly" else 3,
+        "use_feature_selection": trial.suggest_categorical("use_feature_selection", [False]), # Feature selection hasn't been beneficial
+        "class_weight": trial.suggest_categorical("class_weight", ["balanced", None]),
+        "use_tfidf_weighting": trial.suggest_categorical("use_tfidf_weighting", [True]) # TF-IDF weighting has been beneficial
+>>>>>>> Stashed changes
     }
     # Conditionally suggest gamma only for RBF kernel
     if params["kernel"] == "rbf":
@@ -210,10 +222,15 @@ def main() -> None:
     )
     
     try:
+<<<<<<< Updated upstream
         with timer("Hyperparameter optimization (on precomputed features)", logger):
             # n_jobs=1 because SVM fitting is CPU-bound and may not benefit from parallelism here
             # depending on the system. Can try increasing if CPU has many cores.
             study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=1) 
+=======
+        with timer("Hyperparameter optimization", logger):
+            study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=5)
+>>>>>>> Stashed changes
     except KeyboardInterrupt:
         logger.warning("Hyperparameter tuning interrupted by user.")
     
