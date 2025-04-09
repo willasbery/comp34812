@@ -80,6 +80,7 @@ def objective(trial: optuna.Trial) -> float:
     # Simplified hyperparameters for RBF Kernel SVM
     params = {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "C": trial.suggest_float("C", 0.1, 10.0, log=True), # Focused range around C=2
         "kernel": trial.suggest_categorical("kernel", ["linear", "rbf"]),
         "class_weight": trial.suggest_categorical("class_weight", [None, "balanced"]), # None worked best
@@ -87,6 +88,8 @@ def objective(trial: optuna.Trial) -> float:
         "embedding_dim": trial.suggest_int("embedding_dim", 100, 300, step=50), # Tune embedding dimension
         "use_tfidf_weighting": True # Fixed based on previous findings
 =======
+=======
+>>>>>>> Stashed changes
         "C": trial.suggest_float("C", 0.1, 10.0, log=True),
         "kernel": trial.suggest_categorical("kernel", ["rbf"]),
         "gamma": trial.suggest_categorical("gamma", ["auto"]) 
@@ -230,6 +233,9 @@ def main() -> None:
 =======
         with timer("Hyperparameter optimization", logger):
             study.optimize(objective, n_trials=NUM_TRIALS, n_jobs=5)
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     except KeyboardInterrupt:
         logger.warning("Hyperparameter tuning interrupted by user.")
