@@ -44,7 +44,7 @@ This model is an SVM classifier that was trained on 29k pairs of texts.
 
 <!-- This is a short stub of information on the training data that was used, and documentation related to data pre-processing or additional filtering (if applicable). -->
 
-29K pairs of texts drawn from emails, news articles and blog posts (21.5K are original and 6.5K are augmented from the original texts).
+All 21.5K pairs of texts provided as part of the ED training set and an additional 6.5K from augmentation.
 
 ### Training Procedure
 
@@ -83,7 +83,7 @@ This model is an SVM classifier that was trained on 29k pairs of texts.
 
 <!-- This should describe any evaluation data used (e.g., the development/validation set provided). -->
 
-The development dataset provided, amounting to 6K pairs.
+The entire development dataset provided, amounting to 6K pairs.
 
 #### Metrics
 
