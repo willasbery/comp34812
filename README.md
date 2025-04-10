@@ -1,6 +1,6 @@
 # COMP34812 - Natural Language Understanding - Coursework
 
-This repository contains code and models for the COMP34812 NLU coursework, focusing on evidence detection. The project implements various machine learning approaches including traditional approaches like SVM and XGBoost, and other transformer-based models like T5, RoBERTa and DeBERTa.
+This repository contains code and models for the COMP34812 NLU coursework, focusing on evidence detection. The project implements various machine learning approaches including traditional approaches like SVM and XGBoost, and other, transformer-based, models like T5, RoBERTa and DeBERTa.
 
 ## Repository Structure
 
