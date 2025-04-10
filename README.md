@@ -6,20 +6,20 @@ This repository contains code and models for the COMP34812 NLU coursework, focus
 
 ```
 .
-├── src/                    # Source code directory
-│   ├── augmentation/       # Data augmentation utilities
+├── src/                   # Source code directory
+│   ├── augmentation/      # Data augmentation utilities
 │   ├── models/            # Model implementations
-│   │   ├── svm/          # SVM model implementation
-│   │   ├── deberta/      # DeBERTa model implementation
-│   │   ├── deberta efl/  # DeBERTa with EFL implementation
-│   │   ├── T5/           # T5 model implementation
-│   │   ├── xgboost/      # XGBoost model implementation
-│   │   └── roberta/      # RoBERTa model implementation
-│   ├── notebooks/        # Jupyter notebooks for experiments
-│   └── utils/            # Utility functions and helpers
+│   │   ├── svm/           # SVM model implementation
+│   │   ├── deberta/       # DeBERTa model implementation
+│   │   ├── deberta efl/   # DeBERTa with EFL implementation
+│   │   ├── T5/            # T5 model implementation
+│   │   ├── xgboost/       # XGBoost model implementation
+│   │   └── roberta/       # RoBERTa model implementation
+│   ├── notebooks/         # Jupyter notebooks for experiments
+│   └── utils/             # Utility functions and helpers
 ├── data/                  # Data directory
-├── cache/                # Cache directory for GloVe embeddings
-└── .venv/                # Python virtual environment
+├── cache/                 # Cache directory for GloVe embeddings
+└── .venv/                 # Python virtual environment
 ```
 
 ## Models
