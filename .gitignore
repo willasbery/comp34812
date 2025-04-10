@@ -175,3 +175,5 @@ data/training_data/
 cache/
 
 *.DS_Store
+Data/results/svm/
+Data/results/svm/svm_pipeline.pkl

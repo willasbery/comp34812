@@ -22,6 +22,7 @@ dependencies = [
     "tqdm>=4.67.1",
     "peft>=0.15.1",
     "transformers>=4.49.0",
+    "plotly>=6.0.1",
 ]
 
 [[tool.uv.index]]
