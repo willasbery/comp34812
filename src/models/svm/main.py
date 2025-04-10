@@ -87,11 +87,11 @@ def objective(trial: optuna.Trial) -> float:
     
     # Define hyperparameter search space
     params = {
-        "C": trial.suggest_float("C", 1.5, 2.5),
-        "vocab_size": trial.suggest_int("vocab_size", 10000, 20000, step=500),
-        "embedding_dim": trial.suggest_categorical("embedding_dim", [100, 200, 300]),
-        "pca_components": trial.suggest_int("pca_components", 100, 500, step=10),
-        "ngram_range": trial.suggest_int("ngram_range", 1, 3),
+        "C": trial.suggest_float("C", 1.5, 2.5), # Focused range around C=2
+        "vocab_size": trial.suggest_int("vocab_size", 10000, 20000, step=500), # Tune vocab size,
+        "embedding_dim": trial.suggest_categorical ("embedding_dim", [100, 200, 300]), # Tune embedding dimension
+        "pca_components": trial.suggest_int("pca_components", 400, 600, step=10), # Tune PCA components
+        "ngram_range": trial.suggest_int("ngram_range", 1, 3), # Tune ngram range
         "min_df": trial.suggest_int("min_df", 1, 5),
         "max_df": trial.suggest_float("max_df", 0.85, 1.0, step=0.05),
     }
