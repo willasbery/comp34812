@@ -81,7 +81,18 @@ The repository contains several model implementations:
 
 3. **Running Models**
    - For SVM: Use the scripts in `src/models/svm/`
+     ```bash
+     python -m src.models.svm.main
+     or
+     uv run python -m src.models.svm
+     ```
    - For DeBERTa: Use the notebook in `src/notebooks/deberta/`
+   - For data augmentation:
+     ```bash
+     python -m src.augmentation.pipeline.main
+     or
+     uv run python -m src.augmentation.pipeline
+     ```
    - Each model directory contains specific instructions for training and evaluation
 
 ## Additional Information

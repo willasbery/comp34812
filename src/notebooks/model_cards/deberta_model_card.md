@@ -113,8 +113,12 @@ The model obtained an F1-score of 88.9% and an accuracy of 70%.
 ### Software
 
 
-      - Transformers 4.18.0
-      - Pytorch 1.11.0+cu113
+      - Transformers 4.47.0
+      - Pytorch 2.5.1+cu121
+      - PEFT 0.14.0
+      - Optuna 4.2.1
+      - Scikit-learn 1.2.2
+    
 
 ## Bias, Risks, and Limitations
 
