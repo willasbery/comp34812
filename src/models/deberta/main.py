@@ -66,6 +66,7 @@ BASE_MODEL = 'microsoft/deberta-v2-xlarge-mnli'
 # Optuna parameters
 N_TRIALS = 6
 
+
 # Hyperparameter search space
 BATCH_SIZES = [4, 8, 16]
 LEARNING_RATES = [5e-5, 1e-5, 5e-6]
