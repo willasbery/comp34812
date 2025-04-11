@@ -71,7 +71,7 @@ All 21.5K pairs of texts provided as part of the ED training set and an addition
 
 
       - overall training time: 3 hours
-      - model size: 10MB
+      - model size: 500MB
 
 ## Evaluation
 
@@ -113,8 +113,8 @@ The entire development dataset provided, amounting to 6K pairs.
 
 
       - RAM: at least 16 GB recommended
-      - Storage: minimal (model size is relatively small),
-      - CPU: standard CPU sufficient (no GPU required)
+      - Storage: at least 1GB for model files,
+      - CPU: standard CPU sufficient (we used a M2 Macbook Pro) (no GPU required)
 
 ### Software
 
@@ -122,22 +122,17 @@ The entire development dataset provided, amounting to 6K pairs.
       - Scikit-learn 1.3.2
       - Optuna 4.2.1
       - NLTK 3.9.1
-      - Scipy 1.7.0
-      - Gensim 4.3.3
-      - XGBoost 3.0.0
-      - Googletrans 4.0.2
     
 
 ## Bias, Risks, and Limitations
 
 <!-- This section is meant to convey both technical and sociotechnical limitations. -->
 
-Any inputs (concatenation of two sequences) longer than
-      512 tokens will be truncated by the model.
+[More Information Needed]
 
 ## Additional Information
 
 <!-- Any other information that would be useful for other people to know. -->
 
-The hyperparameters for both the LoRA optimiser and model were determined by experimentation
+The hyperparameters for model were determined by experimentation
       with different values using Optuna and a TPE sampler.

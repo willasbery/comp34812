@@ -72,7 +72,7 @@ All 21.5K pairs of texts provided as part of the ED training set and an addition
 
       - overall training time (early stopping occurred): 1.5 hours
       - duration per training epoch: 30 minutes
-      - model size: 10MB
+      - model size: 4GB
 
 ## Evaluation
 
@@ -114,7 +114,7 @@ The entire development dataset provided, amounting to 6K pairs.
 
 
       - RAM: at least 16 GB
-      - Storage: at least 2GB,
+      - Storage: at least 5GB for model weights,
       - GPU: P100
 
 ### Software

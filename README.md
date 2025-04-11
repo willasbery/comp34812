@@ -1,6 +1,6 @@
 # COMP34812 - Natural Language Understanding - Coursework
 
-This repository contains code and models for the COMP34812 NLU coursework, focusing on evidence detection. The project implements various machine learning approaches including traditional approaches like SVM and XGBoost, and other, transformer-based, models like T5, RoBERTa and DeBERTa.
+This repository contains code and models for the COMP34812 NLU coursework, focusing on evidence detection. The project implements various machine learning approaches including traditional approaches like SVM and XGBoost, and other transformer-based models like T5, RoBERTa and DeBERTa.
 
 ## Repository Structure
 
@@ -8,15 +8,18 @@ This repository contains code and models for the COMP34812 NLU coursework, focus
 .
 ├── src/                   # Source code directory
 │   ├── augmentation/      # Data augmentation utilities
-│   ├── models/            # Model implementations
+│   ├── experiments/       # Experimental model implementations
+│   │   ├── xgboost/       # XGBoost experiments
+│   │   ├── roberta/       # RoBERTa experiments
+│   │   ├── deberta efl/   # DeBERTa with EFL experiments
+│   │   └── T5/            # T5 experiments
+│   ├── models/            # Production model implementations
 │   │   ├── svm/           # SVM model implementation
-│   │   ├── deberta/       # DeBERTa model implementation
-│   │   ├── deberta efl/   # DeBERTa with EFL implementation
-│   │   ├── T5/            # T5 model implementation
-│   │   ├── xgboost/       # XGBoost model implementation
-│   │   └── roberta/       # RoBERTa model implementation
+│   │   └── deberta/       # DeBERTa model implementation
 │   ├── notebooks/         # Jupyter notebooks for experiments
-│   └── utils/             # Utility functions and helpers
+│   ├── utils/             # Utility functions and helpers
+│   ├── config.py          # Configuration settings
+│   └── README.md          # Source code documentation
 ├── data/                  # Data directory
 ├── cache/                 # Cache directory for GloVe embeddings
 └── .venv/                 # Python virtual environment
@@ -41,9 +44,10 @@ The repository contains several model implementations:
 
 ### Other Models
 
-- T5: `src/models/T5/`
-- XGBoost: `src/models/xgboost/`
-- RoBERTa: `src/models/roberta/`
+- DeBERTa with EFL: `src/experiments/deberta efl`
+- T5: `src/experiments/T5/`
+- XGBoost: `src/experiments/xgboost/`
+- RoBERTa: `src/experiments/roberta/`
 
 ## Getting Started
 
@@ -77,7 +81,6 @@ The repository contains several model implementations:
 2. **Data Preparation**
 
    - Place your data files in the `data/` directory
-   - Use the notebooks in `src/notebooks/` for data preprocessing
 
 3. **Running Models**
    - For SVM: Use the scripts in `src/models/svm/`
