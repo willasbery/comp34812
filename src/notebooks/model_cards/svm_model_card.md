@@ -70,7 +70,7 @@ All 21.5K pairs of texts provided as part of the ED training set and an addition
 <!-- This section provides information about how roughly how long it takes to train the model and the size of the resulting model. -->
 
 
-      - overall training time: 3 hours
+      - overall training time: 20 minutes (M2 Macbook Pro)
       - model size: 500MB
 
 ## Evaluation
