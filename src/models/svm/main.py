@@ -31,6 +31,7 @@ from src.utils.GloveVectorizer import GloveVectorizer
 from src.utils.FeatureExtractor import FeatureExtractor
 from src.utils.utils import (
     calculate_all_metrics,
+    plot_confusion_matrix,
     get_device,
     get_memory_usage,
     prepare_svm_data,
@@ -141,7 +142,6 @@ def objective(trial: optuna.Trial) -> float:
     with timer(f"Trial {trial_number} evaluation", logger):
         dev_preds = pipeline.predict(dev_texts_trial)
         metrics = calculate_all_metrics(dev_labels_trial, dev_preds)
-    
     # Save trial results
     svm_dir = config.SAVE_DIR / "svm"
     svm_dir.mkdir(parents=True, exist_ok=True)
@@ -392,6 +392,7 @@ def main() -> None:
     pipeline.fit(train_df_processed['text'], train_labels)
     dev_preds = pipeline.predict(dev_df_processed['text'])
     metrics = calculate_all_metrics(dev_labels, dev_preds)
+    plot_confusion_matrix(dev_labels, dev_preds, config.SAVE_DIR / "svm" / "svm_confusion_matrix.png")
     logger.info(f"Final model evaluation: {metrics}")
 
     # Save the trained model

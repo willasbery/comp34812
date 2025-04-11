@@ -9,8 +9,10 @@ from contextlib import contextmanager
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
-    matthews_corrcoef
+    matthews_corrcoef,
+    confusion_matrix
 )
+from matplotlib import pyplot as plt
 import torch
 from collections import Counter
 from typing import Optional, Tuple, Dict, Set
@@ -153,6 +155,40 @@ def calculate_all_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, f
     }
     
     return metrics
+
+def plot_confusion_matrix(y_true, y_pred, save_path):
+    """
+    Plot and save confusion matrix.
+    
+    Args:
+        y_true: True labels
+        y_pred: Predicted labels
+        save_path: Path to save the confusion matrix plot
+    """
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(8, 6))
+    plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    plt.title('Confusion Matrix')
+    plt.colorbar()
+    
+    classes = ['Negative', 'Positive']
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+    
+    cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    
+    thresh = cm.max() / 2.
+    for i, j in np.ndindex(cm.shape):
+        plt.text(j, i, f'{cm[i, j]}\n({cm_norm[i, j]:.2f})',
+                horizontalalignment="center",
+                color="white" if cm[i, j] > thresh else "black")
+    
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.savefig(save_path)
+    plt.close()
 
 def get_memory_usage() -> float:
     """
