@@ -13,28 +13,33 @@ from src.config import config
 CACHE_DIR = config.DATA_DIR.parent / "cache"
 EMBEDDINGS_CACHE_PATH = CACHE_DIR / 'glove_embeddings.pkl'
 
-def load_cached_embeddings():
-    """Load GloVe embeddings from cache if available, otherwise download and cache them."""
+def load_cached_embeddings(embedding_dim=300):
+    """Load GloVe embeddings of specified dimension from cache if available, otherwise download and cache them.
+    Args:
+        embedding_dim (int): Desired dimension for GloVe embeddings (50, 100, 200, or 300). Defaults to 300.
+    Returns:
+        dict: GloVe embeddings.
+    """
     
     # Create cache directory if it doesn't exist
     CACHE_DIR.mkdir(exist_ok=True, parents=True)
     
-    if EMBEDDINGS_CACHE_PATH.exists():
-        logging.info(f"Loading GloVe embeddings from cache: {EMBEDDINGS_CACHE_PATH}")
-        with open(EMBEDDINGS_CACHE_PATH, 'rb') as f:
+    cache_path = CACHE_DIR / f'glove_embeddings_{embedding_dim}.pkl'
+    if cache_path.exists():
+        logging.info(f"Loading GloVe embeddings from cache: {cache_path}")
+        with open(cache_path, 'rb') as f:
             glove_embeddings = pickle.load(f)
     else:
-        logging.info(f"Downloading GloVe embeddings (this might take a while)...")
-        glove_embeddings = glove_embeddings_loader('glove-wiki-gigaword-300')
+        model_name = f'glove-wiki-gigaword-{embedding_dim}'
+        logging.info(f"Downloading GloVe embeddings with model {model_name} (this might take a while)...")
+        glove_embeddings = glove_embeddings_loader(model_name)
         
         # Cache the embeddings for future use
-        logging.info(f"Caching GloVe embeddings to: {EMBEDDINGS_CACHE_PATH}")
-        with open(EMBEDDINGS_CACHE_PATH, 'wb') as f:
+        logging.info(f"Caching GloVe embeddings to: {cache_path}")
+        with open(cache_path, 'wb') as f:
             pickle.dump(glove_embeddings, f)
     
     return glove_embeddings
-
-glove_embeddings = load_cached_embeddings()
 
 class GloveVectorizer(BaseEstimator, TransformerMixin):
     """A vectorizer that combines GloVe word embeddings with positional encoding.
@@ -53,7 +58,7 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         tfidf_vectorizer (TfidfVectorizer): TF-IDF vectorizer for word weighting
     """
     
-    def __init__(self, sep_token: str = '[SEP]', use_tfidf_weighting=True):
+    def __init__(self, sep_token: str = '[SEP]', use_tfidf_weighting=True, vocabulary=None, embedding_dim=300, ngram_range=(1,1), min_df=2, max_df=0.95):
         """Initialize the GloveVectorizer.
         
         Args:
@@ -61,12 +66,24 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
                                      Defaults to '[SEP]'.
             use_tfidf_weighting (bool, optional): Whether to use TF-IDF weights 
                                                 for word embeddings. Defaults to True.
+            vocabulary (set, optional): Set of words to include in the vocabulary.
+            embedding_dim (int, optional): Desired embedding dimension.
+            ngram_range (tuple, optional): The lower and upper boundary of the n-grams to be extracted.
+                                         All values of n such that min_n <= n <= max_n will be used. Defaults to (1,1).
         """
-        self.glove = glove_embeddings
-        self.vector_size = 300
+        self.glove = load_cached_embeddings(embedding_dim)
+        self.vector_size = embedding_dim
         self.sep_token = sep_token
         self.use_tfidf_weighting = use_tfidf_weighting
-        self.tfidf_vectorizer = TfidfVectorizer(min_df=2, max_df=0.95) if use_tfidf_weighting else None
+        self.vocabulary = vocabulary or set()
+        self.ngram_range = ngram_range
+        self.tfidf_vectorizer = TfidfVectorizer(
+            min_df=min_df, 
+            max_df=max_df,
+            vocabulary=self.vocabulary,
+            max_features=len(self.vocabulary) if self.vocabulary else None,
+            ngram_range=self.ngram_range
+        ) if use_tfidf_weighting else None
         
     @staticmethod
     def _pre_process(doc: str) -> str:
@@ -85,37 +102,30 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         return doc
     
     def _get_weighted_vector(self, text: str, tfidf_weights=None) -> np.ndarray:
-        """Compute weighted average of word vectors using TF-IDF weights.
-        
-        Args:
-            text (str): Input text to vectorize
-            tfidf_weights (dict, optional): Dictionary mapping words to their TF-IDF weights
-            
-        Returns:
-            np.ndarray: A vector of size self.vector_size representing the weighted average
-                       of word embeddings. If no words are found in GloVe, returns zero vector.
-        """
-        words = text.split()
+        """Compute weighted average using only vocabulary words"""
+        # Replace OOV words with UNK before processing
+        words = [word if word in self.vocabulary else '<UNK>' for word in text.split()]
         
         if not words:
             return np.zeros(self.vector_size)
             
+        # Restrict to vocabulary words
+        valid_words = [word for word in words if word in self.vocabulary]
+        
         if self.use_tfidf_weighting and tfidf_weights:
-            # Use TF-IDF weights when available
             vectors = []
             weights = []
-            
-            for word in words:
-                if word in self.glove and word in tfidf_weights:
+            for word in valid_words:
+                if word in self.glove:
                     vectors.append(self.glove[word])
-                    weights.append(tfidf_weights[word])
-                    
+                    weights.append(tfidf_weights.get(word, 1.0))  # Default weight=1 if not in TF-IDF
+            
             if vectors:
                 weights = np.array(weights) / np.sum(weights)  # Normalize weights
                 return np.average(vectors, axis=0, weights=weights)
         
         # Fallback to regular mean if no weights or no matching words
-        vectors = [self.glove[word] for word in words if word in self.glove]
+        vectors = [self.glove[word] for word in valid_words if word in self.glove]
         if vectors:
             return np.mean(vectors, axis=0)
             
