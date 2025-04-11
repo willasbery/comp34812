@@ -23,7 +23,7 @@ from transformers import (
     EarlyStoppingCallback,
     DataCollatorWithPadding
 )
-from peft import get_peft_model, LoraConfig, TaskType
+from peft import get_peft_model, LoraConfig, TaskType, PeftModel
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
@@ -313,7 +313,22 @@ def train_model(
     
     trainer.train()
     
-    eval_results = trainer.evaluate()
+    # Get the final model from the trainer
+    model = trainer.model
+
+    # If using PEFT, merge adapters before saving
+    if isinstance(model, PeftModel):
+        logging.info("Merging PEFT adapters into the base model...")
+        model = model.merge_and_unload()
+        logging.info("Adapters merged.")
+
+    # Save the potentially merged model and tokenizer
+    logging.info(f"Saving final model to {output_dir}")
+    model.save_pretrained(output_dir)
+    tokenizer.save_pretrained(output_dir)
+    logging.info(f"Model and tokenizer saved to {output_dir}")
+
+    eval_results = trainer.evaluate(eval_dataset)
     dev_preds = trainer.predict(eval_dataset)
     y_true = dev_preds.label_ids
     y_pred = dev_preds.predictions.argmax(axis=1)
@@ -346,11 +361,6 @@ def train_model(
     
     cm_save_path = os.path.join(output_dir, "confusion_matrix.png")
     plot_confusion_matrix(y_true, y_pred, cm_save_path)
-    
-    trainer.save_model()
-    logging.info(f"Model saved to {output_dir}")
-
-    print(eval_results)
     
     return eval_results
 
@@ -558,7 +568,7 @@ def main():
     )
     model.config.num_labels = 2
 
-    # model = get_peft_model(model, peft_config)
+    model = get_peft_model(model, peft_config)
     model.to(device)
 
     train_dataset, dev_dataset, dev_df = load_data(tokenizer, MAX_SEQ_LENGTH)
@@ -599,3 +609,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
