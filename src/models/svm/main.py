@@ -12,6 +12,7 @@ import logging
 import time
 import pickle
 from typing import Dict, List, Tuple, Union, Optional
+from pathlib import Path
 
 import numpy as np
 import optuna
@@ -38,6 +39,19 @@ from src.utils.utils import (
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+params = {
+    "vocab_size": 12000,
+    "n_gram_range": (1, 2),
+    "embedding_dim": 300,
+    "pca_components": 540,
+    "C": 1.96,
+    "tfidf_weighting": True,
+    "min_df": 1,
+    "max_df": 0.95,
+    "kernel": 'rbf',
+    "gamma": 'scale'
+}
 
 # Configuration Constants
 NUM_TRIALS = 100
@@ -165,12 +179,12 @@ def create_pipeline_from_params(params: Dict, vocabulary: List[str]) -> Pipeline
     # Feature extraction component
     pipeline_steps.append(('glove_feature_union', FeatureUnion([
         ('glove', GloveVectorizer(
-            use_tfidf_weighting=True,
+            use_tfidf_weighting=params['tfidf_weighting'],
             vocabulary=vocabulary,
             embedding_dim=params['embedding_dim'],
-            ngram_range=(1, 2),
-            min_df=1,
-            max_df=0.95
+            ngram_range=params['n_gram_range'],
+            min_df=params['min_df'],
+            max_df=params['max_df']
         )),
         ('feature_extractor', FeatureExtractor())
     ])))
@@ -182,8 +196,8 @@ def create_pipeline_from_params(params: Dict, vocabulary: List[str]) -> Pipeline
     # SVM classifier with RBF kernel
     pipeline_steps.append(('svm', SVC(
         C=params['C'],
-        kernel='rbf',
-        gamma='scale',
+        kernel=params['kernel'],
+        gamma=params['gamma'],
         probability=False,
         random_state=42
     )))
@@ -256,21 +270,101 @@ def hyperparameter_tuning(show_plots: bool = False) -> Dict:
     return trial.params
 
 
+def predict_with_saved_model(
+    pipeline_path: Path, 
+    input_csv_path: Path, 
+    output_csv_path: Path
+) -> None:
+    """
+    Loads a saved SVM pipeline, makes predictions on data from an input CSV, 
+    and saves the predictions to an output CSV.
+
+    Args:
+        pipeline_path: Path to the saved .pkl pipeline file.
+        input_csv_path: Path to the input CSV file (must contain 'Evidence' column).
+        output_csv_path: Path where the predictions CSV will be saved.
+    """
+    logger.info("\n" + "="*70)
+    logger.info(f"MAKING PREDICTIONS FROM {input_csv_path}")
+    logger.info("="*70)
+
+    # --- Input Validation ---
+    if not pipeline_path.exists():
+        logger.error(f"Pipeline file not found at {pipeline_path}. Cannot make predictions.")
+        return
+    if not input_csv_path.exists():
+        logger.error(f"Input CSV file not found at {input_csv_path}. Cannot make predictions.")
+        return
+    
+    # Ensure output directory exists
+    output_csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        # --- Load Pipeline --- 
+        with open(pipeline_path, "rb") as f:
+            loaded_pipeline = pickle.load(f)
+        logger.info(f"Pipeline loaded successfully from {pipeline_path}")
+
+        # --- Load and Prepare Input Data ---
+        input_df = pd.read_csv(input_csv_path)
+        logger.info(f"Loaded {len(input_df)} rows from {input_csv_path}")
+
+        if 'Evidence' not in input_df.columns:
+            logger.error(f"Input CSV {input_csv_path} must contain an 'Evidence' column.")
+            return
+            
+
+        # Determine training parameters needed for preprocessing
+        training_vocab_size = params.get('vocab_size', 12000) 
+        logger.info(f"Using parameters for preprocessing: vocab_size={training_vocab_size}")
+
+
+        # Apply the *exact same* preprocessing as used during training
+        processed_data_df, _, _ = prepare_svm_data(
+            input_df, 
+            remove_stopwords=True,
+            lemmatize=True,        
+            min_freq=2, 
+            vocab_size=training_vocab_size
+        )
+        processed_texts = processed_data_df['text'].tolist()
+        logger.info(f"Preprocessing complete for {len(processed_texts)} texts.")
+
+        # --- Make Predictions --- 
+        predictions = loaded_pipeline.predict(processed_texts)
+        logger.info(f"Generated {len(predictions)} predictions.")
+
+        # --- Save Predictions --- 
+        predictions_df = pd.DataFrame({'prediction': predictions})
+        predictions_df.to_csv(output_csv_path, index=False)
+        logger.info(f"Predictions saved successfully to {output_csv_path}")
+
+    except ModuleNotFoundError as e:
+         logger.error(f"Error loading pickle: A module required by the pickled object was not found: {e}")
+         logger.error("Ensure all necessary libraries and custom classes (GloveVectorizer, etc.) are importable.")
+    except FileNotFoundError as e:
+        logger.error(f"Error: A required file was not found: {e}")
+    except KeyError as e:
+        logger.error(f"Error: Missing expected column in input data: {e}")
+    except Exception as e:
+        logger.error(f"An error occurred during prediction: {e}", exc_info=True)
+
+
 def main() -> None:
     """
     Main execution function for SVM model training and optimization.
     
     Performs hyperparameter tuning, trains the final model with optimal 
-    parameters on full dataset, and saves the model.
+    parameters on full dataset, saves the model, and runs prediction example.
     """
-    global train_df_raw, dev_df_raw
+    global train_df_raw, dev_df_raw, params
     
     logger.info("\n" + "="*70)
     logger.info("EVIDENCE DETECTION SVM MODEL TRAINING")
     logger.info("="*70)
     
     # Find optimal hyperparameters
-    params = hyperparameter_tuning(show_plots=True)
+    # params = hyperparameter_tuning(show_plots=True)
     
     # Process data with optimal parameters
     train_df_processed, train_labels, best_vocab = prepare_svm_data(
@@ -306,8 +400,24 @@ def main() -> None:
         with open(pipeline_pickle_path, "wb") as f:
             pickle.dump(pipeline, f)
         logger.info(f"Pipeline successfully saved to {pipeline_pickle_path}")
+        
     except Exception as e:
-        logger.error(f"Error saving pipeline: {e}")
+        logger.error(f"Error saving pipeline: {e}", exc_info=True)
+
+    try:
+        prediction_input_file = config.DEV_FILE
+        prediction_output_file = config.DATA_DIR / "svm_predictions.csv"
+        
+        # Ensure the predictions directory exists
+        prediction_output_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        predict_with_saved_model(
+            pipeline_path=pipeline_pickle_path,
+            input_csv_path=prediction_input_file, 
+            output_csv_path=prediction_output_file
+        )
+    except Exception as e:
+        logger.error(f"Error predicting with saved model: {e}", exc_info=True)
 
 
 if __name__ == "__main__":
