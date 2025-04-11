@@ -61,20 +61,7 @@ The repository contains several model implementations:
 
 1. **Environment Setup**
 
-   You can use either Python's built-in venv or UV package manager:
-
-   **Option 1: Using Python venv**
-
-   ```bash
-   # Create and activate virtual environment
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-   # Install dependencies
-   pip install -r requirements.txt
-   ```
-
-   **Option 2: Using UV (Recommended)**
+   **Using UV**
 
    ```bash
    # Install UV if not already installed
