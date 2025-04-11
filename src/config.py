@@ -33,19 +33,13 @@ class BaseConfig:
                 "min_similarity": 0.85,
                 "min_word_length": 4,
                 "word_frequency_threshold": 3,
-                "split": {
-                    "Claim": 0.15,
-                    "Evidence": 0.7,
-                    "Both": 0.15
-                }
-            },
-            "easy_data_augmentation": {
-                "percentage": 0.8,
-                "split": {
-                    "Claim": 0.1,
-                    "Evidence": 0.9,
-                    "Both": 0.0
-                }
+                "synonym_selection_strategy": "random",
+                "enable_random_synonym_insertion": True,
+                "synonym_insertion_probability": 0.03,
+                "enable_random_word_insertion": True,
+                "word_insertion_probability": 0.01,
+                "enable_random_deletion": True,
+                "deletion_probability": 0.01,
             },
             "x_or_y": {
                 "percentage": 0.08,
@@ -84,19 +78,13 @@ class BaseConfig:
                 "min_similarity": 0.85,
                 "min_word_length": 4,
                 "word_frequency_threshold": 3,
-                "split": {
-                    "Claim": 0.15,
-                    "Evidence": 0.7,
-                    "Both": 0.15
-                }
-            },
-            "easy_data_augmentation": {
-                "percentage": 0.8,
-                "split": {
-                    "Claim": 0.1,
-                    "Evidence": 0.9,
-                    "Both": 0.0
-                }
+                "synonym_selection_strategy": "random",
+                "enable_random_synonym_insertion": True,
+                "synonym_insertion_probability": 0.03,
+                "enable_random_word_insertion": True,
+                "word_insertion_probability": 0.01,
+                "enable_random_deletion": True,
+                "deletion_probability": 0.01,
             },
             "x_or_y": {
                 "percentage": 0.02,

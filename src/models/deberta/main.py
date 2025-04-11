@@ -179,7 +179,8 @@ def load_data(tokenizer, max_seq_length):
     
     columns_to_remove = [col for col in dev_df.columns if col not in ['original_index']]
     dev_dataset = dev_dataset.map(
-        lambda examples: preprocess_function(examples, tokenizer, max_seq_length),
+        lambda examples: {**preprocess_function(examples, tokenizer, max_seq_length),
+                           'original_index': examples['original_index']},
         batched=True,
         batch_size=1000,
         remove_columns=columns_to_remove

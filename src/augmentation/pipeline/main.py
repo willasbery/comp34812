@@ -10,7 +10,6 @@ PLAN:
 8. save augmented data to a new file with orignal training data as well
 """
 import logging
-import random
 import pandas as pd
 import numpy as np
 
