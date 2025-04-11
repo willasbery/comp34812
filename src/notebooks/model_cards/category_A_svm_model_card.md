@@ -23,21 +23,20 @@ This is a classification model that was trained to
 
 <!-- Provide a longer summary of what this model is. -->
 
-This model is based upon the `microsoft/deberta-v3-large` model that was fine-tuned
-      on 29k pairs of texts.
+This model is an SVM classifier that was trained on 29k pairs of texts.
 
 - **Developed by:** Harvey Dennis and William Asbery
 - **Language(s):** English
 - **Model type:** Supervised
-- **Model architecture:** Transformers
-- **Finetuned from model [optional]:** deberta-v3-large
+- **Model architecture:** SVM
+- **Finetuned from model [optional]:** [More Information Needed]
 
 ### Model Resources
 
 <!-- Provide links where applicable. -->
 
-- **Repository:** https://huggingface.co/microsoft/deberta-v3-base
-- **Paper or documentation:** https://arxiv.org/pdf/2111.09543
+- **Repository:** [More Information Needed]
+- **Paper or documentation:** [More Information Needed]
 
 ## Training Details
 
@@ -56,23 +55,23 @@ All 21.5K pairs of texts provided as part of the ED training set and an addition
 <!-- This is a summary of the values of hyperparameters used in training the model. -->
 
 
-      - learning_rate: 5e-05
-      - weight_decay: 0.03
-      - warmup_ratio: 0.11
-      - dropout_rate: 0.05
-      - max_seq_length: 512
-      - batch_size: 8
+      - embedding_dim: 300
+      - ngram: 2
+      - pca_components (SVD): 540
+      - vocab_size: 12,000
+      - C: 1.96
+      - kernel: rbf
+      - use_tf_idf_weightings: True
+      - gamma: scale
       - seed: 42
-      - num_epochs: 8 (early stopping enabled)
 
 #### Speeds, Sizes, Times
 
 <!-- This section provides information about how roughly how long it takes to train the model and the size of the resulting model. -->
 
 
-      - overall training time (early stopping occurred): 1.5 hours
-      - duration per training epoch: 30 minutes
-      - model size: 4GB
+      - overall training time: 8 minutes (M2 Macbook Pro)
+      - model size: 500MB
 
 ## Evaluation
 
@@ -101,11 +100,11 @@ The entire development dataset provided, amounting to 6K pairs.
 
 
     The model obtained:
-      - Weighted Precision of 89.6%
-      - Weighted Recall of 89.3%
-      - Weighted F1-score of 89.4%
-      - Accuracy of 89.3%
-      - MCC of 0.74
+      - Weighted Precision of 82.7%
+      - Weighted Recall of 82.5%
+      - Weighted F1-score of 82.6%
+      - Accuracy of 82.5%
+      - MCC of 0.57
     
 
 ## Technical Specifications
@@ -113,30 +112,27 @@ The entire development dataset provided, amounting to 6K pairs.
 ### Hardware
 
 
-      - RAM: at least 16 GB
-      - Storage: at least 5GB for model weights,
-      - GPU: P100
+      - RAM: at least 16 GB recommended
+      - Storage: at least 1GB for model files,
+      - CPU: standard CPU sufficient (we used a M2 Macbook Pro) (no GPU required)
 
 ### Software
 
 
-      - Transformers 4.47.0
-      - Pytorch 2.5.1+cu121
-      - PEFT 0.14.0
+      - Scikit-learn 1.3.2
       - Optuna 4.2.1
-      - Scikit-learn 1.2.2
+      - NLTK 3.9.1
     
 
 ## Bias, Risks, and Limitations
 
 <!-- This section is meant to convey both technical and sociotechnical limitations. -->
 
-Any inputs (concatenation of two sequences) longer than
-      512 tokens will be truncated by the model.
+[More Information Needed]
 
 ## Additional Information
 
 <!-- Any other information that would be useful for other people to know. -->
 
-The hyperparameters for both the LoRA optimiser and model were determined by experimentation
+The hyperparameters for model were determined by experimentation
       with different values using Optuna and a TPE sampler.
