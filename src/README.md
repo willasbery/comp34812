@@ -4,27 +4,46 @@ This directory contains the main source code for the COMP34812 NLU coursework. B
 
 ## Directory Structure
 
-### `models/` - Model Implementations
+### `models/` - Production Model Implementations
 
-Contains implementations of various models for evidence detection:
+Contains the production-ready implementations of models for evidence detection:
 
 - **SVM (`svm/`)**
 
   - Traditional machine learning approach using Support Vector Machines
   - Includes feature extraction using GloVe embeddings
   - Contains training and evaluation scripts
+  - Production-ready implementation
 
-- **DeBERTa (`deberta/` and `deberta efl/`)**
+- **DeBERTa (`deberta/`)**
 
-  - Transformer-based models for evidence detection
-  - Standard DeBERTa and Evidence-Focused Learning (EFL) variants
+  - Transformer-based model for evidence detection
   - Includes model configuration and training utilities
+  - Production-ready implementation
   - **NOTE**: the DeBERTa fine-tuning file is found in `notebooks/`, not `models/`
 
-- **Other Models**
-  - T5: Transformer-based text-to-text model
-  - XGBoost: Gradient boosting implementation
-  - RoBERTa: Robustly optimized BERT approach
+### `experiments/` - Experimental Model Implementations
+
+Contains experimental model implementations that were developed during research but not used in the final pipeline:
+
+- **DeBERTa with EFL (`deberta efl/`)**
+
+  - Enhanced DeBERTa model using Evidence-Focused Learning
+  - Experimental implementation with custom attention mechanisms
+
+- **T5 (`T5/`)**
+
+  - Transformer-based text-to-text model
+  - Experimental sequence-to-sequence approach
+
+- **XGBoost (`xgboost/`)**
+
+  - Gradient boosting implementation
+  - Experimental tree-based approach
+
+- **RoBERTa (`roberta/`)**
+  - Robustly optimized BERT approach
+  - Experimental transformer-based implementation
 
 ### `notebooks/` - Jupyter Notebooks
 
@@ -64,7 +83,8 @@ Common utilities used across the project:
 
 1. **Model Training**
 
-   - Each model directory contains its own README with specific instructions
+   - Production models are in `models/` with their own READMEs
+   - Experimental models are in `experiments/` with their own READMEs
    - Use the notebooks in `notebooks/` for interactive experimentation
    - Configuration can be modified in `config.py`
 
@@ -81,7 +101,8 @@ Common utilities used across the project:
 
 1. **Adding New Models**
 
-   - Create a new directory in `models/`
+   - For production models: Create a new directory in `models/`
+   - For experimental models: Create a new directory in `experiments/`
    - Include a README with setup and usage instructions
    - Use common utilities from `utils/` where possible
 
