@@ -25,6 +25,10 @@ This repository contains code and models for the COMP34812 NLU coursework, focus
 └── .venv/                 # Python virtual environment
 ```
 
+## Trained models
+
+You can find the trained versions of the models [here](https://drive.google.com/drive/folders/1iPO9eOqhOcxakccri3-Thjm0wH09LKT4?usp=sharing).
+
 ## Models
 
 The repository contains several model implementations:
