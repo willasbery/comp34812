@@ -91,9 +91,8 @@ def objective(trial: optuna.Trial) -> float:
         "vocab_size": trial.suggest_int("vocab_size", 10000, 20000, step=500), # Tune vocab size,
         "embedding_dim": trial.suggest_categorical ("embedding_dim", [100, 200, 300]), # Tune embedding dimension
         "pca_components": trial.suggest_int("pca_components", 400, 600, step=10), # Tune PCA components
-        "ngram_range": trial.suggest_int("ngram_range", 1, 3), # Tune ngram range
-        "min_df": trial.suggest_int("min_df", 1, 5),
-        "max_df": trial.suggest_float("max_df", 0.85, 1.0, step=0.05),
+        # "min_df": trial.suggest_int("min_df", 1, 2),
+        # "max_df": trial.suggest_float("max_df", 0.85, 1.0, step=0.05),
     }
         
     # Data preparation for this trial
@@ -169,9 +168,9 @@ def create_pipeline_from_params(params: Dict, vocabulary: List[str]) -> Pipeline
             use_tfidf_weighting=True,
             vocabulary=vocabulary,
             embedding_dim=params['embedding_dim'],
-            ngram_range=(1, params['ngram_range']),
-            min_df=params['min_df'],
-            max_df=params['max_df']
+            ngram_range=(1, 2),
+            min_df=1,
+            max_df=0.95
         )),
         ('feature_extractor', FeatureExtractor())
     ])))
@@ -205,9 +204,6 @@ def hyperparameter_tuning(show_plots: bool = False) -> Dict:
         Dict: Best hyperparameters found during optimization
     """
     logger.info(f"Running {NUM_TRIALS} hyperparameter optimization trials...")
-    
-    device = get_device()
-    logger.info(f"Using device: {device} (Note: scikit-learn SVM implementation will utilize CPU)")
     
     # Configure Optuna sampler and pruner
     sampler = TPESampler(
