@@ -10,7 +10,7 @@ import gc
 import json
 import logging
 import time
-import pickle
+import cloudpickle
 from typing import Dict, List, Tuple, Union, Optional
 from pathlib import Path
 
@@ -300,10 +300,10 @@ def predict_with_saved_model(
     output_csv_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        # --- Load Pipeline --- 
+        # --- Load Pipeline ---
         with open(pipeline_path, "rb") as f:
-            loaded_pipeline = pickle.load(f)
-        logger.info(f"Pipeline loaded successfully from {pipeline_path}")
+            loaded_pipeline = cloudpickle.load(f)
+        logger.info(f"Pipeline loaded successfully using cloudpickle from {pipeline_path}")
 
         # --- Load and Prepare Input Data ---
         input_df = pd.read_csv(input_csv_path)
@@ -340,8 +340,8 @@ def predict_with_saved_model(
         logger.info(f"Predictions saved successfully to {output_csv_path}")
 
     except ModuleNotFoundError as e:
-         logger.error(f"Error loading pickle: A module required by the pickled object was not found: {e}")
-         logger.error("Ensure all necessary libraries and custom classes (GloveVectorizer, etc.) are importable.")
+        logger.error(f"Error loading cloudpickle: A module required was not found: {e}")
+        logger.error("Ensure necessary libraries (sklearn, pandas, etc.) are installed and compatible.")
     except FileNotFoundError as e:
         logger.error(f"Error: A required file was not found: {e}")
     except KeyError as e:
@@ -399,15 +399,15 @@ def main() -> None:
     pipeline_pickle_path = config.SAVE_DIR / "svm" / "svm_pipeline.pkl"
     try:
         with open(pipeline_pickle_path, "wb") as f:
-            pickle.dump(pipeline, f)
-        logger.info(f"Pipeline successfully saved to {pipeline_pickle_path}")
+            cloudpickle.dump(pipeline, f)
+        logger.info(f"Pipeline successfully saved using cloudpickle to {pipeline_pickle_path}")
         
     except Exception as e:
-        logger.error(f"Error saving pipeline: {e}", exc_info=True)
+        logger.error(f"Error saving pipeline with cloudpickle: {e}", exc_info=True)
 
     try:
-        prediction_input_file = config.DEV_FILE
-        prediction_output_file = config.DATA_DIR / "svm_predictions.csv"
+        prediction_input_file = config.TEST_FILE
+        prediction_output_file = config.DATA_DIR / "test_svm_predictions.csv"
         
         # Ensure the predictions directory exists
         prediction_output_file.parent.mkdir(parents=True, exist_ok=True)

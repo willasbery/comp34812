@@ -4,6 +4,7 @@ class BaseConfig:
     DATA_DIR = Path(__file__).parent.parent / "data"
     TRAIN_FILE = DATA_DIR / "train.csv"
     DEV_FILE = DATA_DIR / "dev.csv"
+    TEST_FILE = DATA_DIR / "test.csv"
     AUG_TRAIN_FILE = DATA_DIR / "train_augmented.csv"
     SAVE_DIR = DATA_DIR / "results"
     CACHE_DIR = Path(__file__).parent.parent / "cache"

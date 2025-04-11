@@ -112,7 +112,10 @@ def prepare_svm_data(data: pd.DataFrame,
                     " [SEP] " + "Evidence: " + data['Evidence'].apply(clean_text).apply(replace_rare_words))
 
     # Extract labels
-    labels = data['label'].values
+    if 'label' in data.columns:
+        labels = data['label'].values
+    else:
+        labels = [None] * len(data)
 
     return data, labels, vocab
 
