@@ -66,6 +66,13 @@ The repository contains several model implementations:
    ```bash
    # Install UV if not already installed
    pip install uv
+   # If your having troubles:
+   ## Mac / Linux:
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ## Windows:
+   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+
 
    # Create virtual environment and install dependencies
    uv venv
