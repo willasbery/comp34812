@@ -1,29 +1,51 @@
 import argparse
 import logging
-import pandas as pd
-import nltk
 import random
-from tqdm import tqdm
 from pathlib import Path
+
+import nltk
+import pandas as pd
 from nltk.corpus import stopwords, wordnet
+from tqdm import tqdm
 
 from src.config import config
 from src.augmentation.synonym_replacement.utils import load_cached_embeddings
 
+# Download required NLTK resources
 nltk.download('stopwords')
 nltk.download('averaged_perceptron_tagger')
 nltk.download('wordnet')
 
+# Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     level=logging.INFO
 )
 
+# Load embeddings once for reuse
 glove_embeddings = load_cached_embeddings()
 
+
 class XorYAugmenter:
-    def __init__(self, train_df: pd.DataFrame, similarity_threshold: float = 0.6, max_choices: int = 2, num_words_to_augment: int = 1):
+    """
+    A text augmentation class that replaces words with alternatives in X/Y format.
+    
+    This augmenter finds candidate words in a text and replaces them with a format
+    like "word/synonym1/synonym2", creating variations of the original text.
+    """
+    
+    def __init__(self, train_df: pd.DataFrame, similarity_threshold: float = 0.6, 
+                 max_choices: int = 2, num_words_to_augment: int = 1):
+        """
+        Initialize the XorYAugmenter.
+        
+        Args:
+            train_df: Training dataframe containing text to analyze
+            similarity_threshold: Threshold for word similarity (0.0-1.0)
+            max_choices: Maximum number of alternative words to include
+            num_words_to_augment: Number of words to augment in each text
+        """
         self.train_df = train_df
         self.similarity_threshold = similarity_threshold
         self.max_choices = max_choices
@@ -31,17 +53,16 @@ class XorYAugmenter:
         
         self.stop_words = set(stopwords.words('english'))
         self.glove_embeddings = glove_embeddings
-        
     
     def _find_candidates(self, claim: str) -> list[tuple[str, str]]:
         """
-        Find candidates for X or Y augmentation 
-
+        Find candidate words for augmentation in the given text.
+        
         Args:
-            claim (str): The claim to search for candidates
-
+            claim: The text to analyze for augmentation candidates
+            
         Returns:
-            list[tuple[str, str]]: The possible candidates for augmentation with their POS tags
+            List of (word, POS tag) tuples that are candidates for augmentation
         """
         tokens = nltk.word_tokenize(claim)
         pos = nltk.pos_tag(tokens)
@@ -49,20 +70,23 @@ class XorYAugmenter:
         candidates = []
         
         for word, tag in pos:
-            if word.lower() in self.stop_words:
-                continue
-            
-            if word.lower() not in self.glove_embeddings:
+            # Skip stopwords and words not in our embedding vocabulary
+            if word.lower() in self.stop_words or word.lower() not in self.glove_embeddings:
                 continue
             
             candidates.append((word, tag))
             
         return candidates
                 
-
     def _get_wordnet_pos(self, nltk_tag: str) -> str:
         """
         Map NLTK POS tags to WordNet POS tags.
+        
+        Args:
+            nltk_tag: POS tag from NLTK tagger
+            
+        Returns:
+            Corresponding WordNet POS tag
         """
         tag_map = {
             'JJ': wordnet.ADJ,
@@ -73,17 +97,16 @@ class XorYAugmenter:
         }
         return tag_map.get(nltk_tag[:2], wordnet.NOUN)
         
-
-    def _get_similar_word(self, word: str, pos_tag: str = None) -> list[str]:
+    def _get_similar_words(self, word: str, pos_tag: str = None) -> list[str]:
         """
-        Get similar words using both GloVe embeddings and WordNet
-
+        Find similar words using WordNet.
+        
         Args:
-            word (str): The word to search for similar words
-            pos_tag (str): Part of speech tag
-
+            word: The word to find synonyms for
+            pos_tag: Part of speech tag to constrain synonyms
+            
         Returns:
-            list[str]: A list of similar words, sorted by similarity
+            List of similar words suitable for augmentation
         """     
         topn = max(4, self.max_choices * 3)
         
@@ -94,6 +117,7 @@ class XorYAugmenter:
         if not synsets:
             return []
 
+        # Collect synonyms from WordNet
         for syn in synsets:
             for lemma in syn.lemmas():
                 synonym = lemma.name().replace('_', ' ')
@@ -104,17 +128,26 @@ class XorYAugmenter:
             if len(candidates) >= topn:
                 break
 
-        # Preserve capitalization
+        # Preserve original capitalization
         synonym_list = list(candidates)
         if word[0].isupper():
             synonym_list = [s.capitalize() for s in synonym_list]
             
+        # Sample a subset of synonyms
         synonyms_to_return = random.sample(synonym_list, min(topn, len(synonym_list)))
 
         return synonyms_to_return
     
-    
-    def _augment(self, text: str) -> str | None:
+    def _augment_text(self, text: str) -> str | None:
+        """
+        Augment a single text by replacing words with X/Y alternatives.
+        
+        Args:
+            text: The text to augment
+            
+        Returns:
+            Augmented text or None if augmentation was not possible
+        """
         candidates = self._find_candidates(text)
         if not candidates:
             return None
@@ -124,7 +157,7 @@ class XorYAugmenter:
         candidates = candidates[:num_candidates]
 
         for candidate in candidates:
-            similar_words = self._get_similar_word(candidate[0], candidate[1])
+            similar_words = self._get_similar_words(candidate[0], candidate[1])
             if not similar_words:
                 continue
 
@@ -138,34 +171,38 @@ class XorYAugmenter:
 
         return text
 
-
     def augment_data(self, data: pd.DataFrame, augment_claim: bool = True, augment_evidence: bool = False) -> None:
         """
-        Augment the claims by adding a '/' between words in-place.
-
+        Augment a dataset by adding X/Y alternatives to selected fields.
+        
+        This method modifies the dataframe in-place, adding alternatives to either
+        claims, evidence, or both depending on the parameters.
+        
         Args:
-            data (pd.DataFrame): The DataFrame containing claims to augment
-
-        Returns:
-            None
+            data: DataFrame containing text to augment
+            augment_claim: Whether to augment the 'Claim' column
+            augment_evidence: Whether to augment the 'Evidence' column
         """
         for index, row in tqdm(data.iterrows(), total=len(data), desc="Augmenting dataset"):
             if augment_claim:
-                new_claim = self._augment(row['Claim'])
+                new_claim = self._augment_text(row['Claim'])
                 if new_claim:
                     data.at[index, 'Claim'] = new_claim
             
             if augment_evidence:
-                new_evidence = self._augment(row['Evidence'])
+                new_evidence = self._augment_text(row['Evidence'])
                 if new_evidence:
                     data.at[index, 'Evidence'] = new_evidence
-        
-        # No return statement needed as the DataFrame is modified in-place.
 
 
 def main():
+    """
+    Main function to run the X/Y augmentation on the dataset.
+    
+    Parses command line arguments and runs the augmentation process.
+    """
     parser = argparse.ArgumentParser(
-        description='Data augmention by adding / to claims'
+        description='Data augmentation by adding X/Y alternatives to texts'
     )
     parser.add_argument(
         '--output_file',
@@ -189,22 +226,33 @@ def main():
         '--similarity_threshold',
         type=float,
         default=0.6,
-        help='Threshold for similarity between word and its other words'
+        help='Threshold for similarity between word and its alternatives'
     )
     args = parser.parse_args()
     
     output_path = config.DATA_DIR / Path(args.output_file)
     
+    # Load and filter training data
     train_df = pd.read_csv(config.TRAIN_FILE)
     train_df = train_df[train_df['label'] == 1]
     
-    augmenter = XorYAugmenter(train_df, args.similarity_threshold, args.max_choices, args.num_words_to_augment)
+    # Create augmenter and process data
+    augmenter = XorYAugmenter(
+        train_df, 
+        args.similarity_threshold, 
+        args.max_choices, 
+        args.num_words_to_augment
+    )
     
     augmenter.augment_data(train_df)
     
+    # Save augmented data
     train_df.to_csv(output_path, index=False)
+
+
+if __name__ == "__main__":
+    main()
     
 
-    
     
     

@@ -7,7 +7,8 @@ import re
 from scipy.spatial.distance import cosine
 
 class FeatureExtractor:
-    """A feature extractor that combines various text-based features for evidence detection.
+    """
+    A feature extractor that combines various text-based features for evidence detection.
     
     This extractor computes a rich set of features including:
     1. Basic text statistics (lengths, word counts, etc.)
@@ -24,7 +25,8 @@ class FeatureExtractor:
     """
     
     def __init__(self):
-        """Initialize the FeatureExtractor.
+        """
+        Initialize the FeatureExtractor.
         
         Downloads required NLTK resources if not already present:
         - vader_lexicon: For sentiment analysis
@@ -36,67 +38,37 @@ class FeatureExtractor:
         self.tfidf = TfidfVectorizer(max_features=100, stop_words='english')
         
     def transform(self, X):
-        """Transform input texts into feature vectors.
+        """
+        Transform input texts into feature vectors.
         
         For each input text (containing claim and evidence), computes:
         1. Basic text statistics:
-           - Total text length
-           - Claim and evidence lengths
            - Word overlap between claim and evidence
-           - Word counts
-           - Length ratios
-           - Average word lengths
         
         2. Sentiment features:
            - Negative, neutral, positive scores for both claim and evidence
            - Compound sentiment scores
            - Absolute difference in sentiment between claim and evidence
         
-        3. Text characteristics:
-           - Capitalization ratios
-           - Punctuation counts
-           - Digit ratios
-        
-        4. TF-IDF similarity between claim and evidence
+        3. TF-IDF similarity between claim and evidence
         
         Args:
             X (array-like): Input texts. Each element should be a string containing
                           claim and evidence separated by '[SEP]'.
             
         Returns:
-            pd.DataFrame: Feature matrix with the following columns:
-                - text_length: Total length of the combined text
-                - claim_length: Length of the claim portion
-                - evidence_length: Length of the evidence portion
-                - word_overlap: Number of words that appear in both claim and evidence
-                - claim_words: Number of words in claim
-                - evidence_words: Number of words in evidence
-                - claim_evidence_ratio: Ratio of claim length to evidence length
-                - avg_word_length_claim: Average word length in claim
-                - avg_word_length_evidence: Average word length in evidence
-                - claim_sentiment_neg: Negative sentiment score for claim
-                - claim_sentiment_neu: Neutral sentiment score for claim
-                - claim_sentiment_pos: Positive sentiment score for claim
-                - claim_sentiment_compound: Compound sentiment score for claim
-                - evidence_sentiment_neg: Negative sentiment score for evidence
-                - evidence_sentiment_neu: Neutral sentiment score for evidence
-                - evidence_sentiment_pos: Positive sentiment score for evidence
-                - evidence_sentiment_compound: Compound sentiment score for evidence
-                - sentiment_diff: Absolute difference in compound sentiment scores
-                - claim_capitals_ratio: Ratio of capital letters in claim
-                - evidence_capitals_ratio: Ratio of capital letters in evidence
-                - claim_punctuation_count: Number of punctuation marks in claim
-                - evidence_punctuation_count: Number of punctuation marks in evidence
-                - claim_digit_ratio: Ratio of digits in claim
-                - evidence_digit_ratio: Ratio of digits in evidence
-                - tfidf_similarity: Cosine similarity between claim and evidence TF-IDF vectors
+            pd.DataFrame: Feature matrix with sentiment and similarity features.
         """
         features = []
         
         for text in X:
             claim, evidence = text.split("[SEP]")
+            
+            # Extract sentiment features
             claim_sentiments = self.sentiment_analyzer.polarity_scores(claim)
             evidence_sentiments = self.sentiment_analyzer.polarity_scores(evidence)
+            
+            # Create feature dictionary
             feature_dict = {
                 'word_overlap': len(set(claim.split()) & set(evidence.split())),
                 'claim_sentiment_neg': claim_sentiments['neg'],
@@ -109,19 +81,25 @@ class FeatureExtractor:
                 'evidence_sentiment_compound': evidence_sentiments['compound'],
                 'sentiment_diff': abs(claim_sentiments['compound'] - evidence_sentiments['compound'])
             }
+            
+            # Calculate TF-IDF similarity
             claim_tfidf = self.tfidf.transform([claim]).toarray()[0]
             evidence_tfidf = self.tfidf.transform([evidence]).toarray()[0]
+            
+            # Calculate cosine similarity only if vectors are non-zero
             if np.sum(claim_tfidf) > 0 and np.sum(evidence_tfidf) > 0:
                 tfidf_similarity = 1 - cosine(claim_tfidf, evidence_tfidf)
             else:
                 tfidf_similarity = 0
+                
             feature_dict['tfidf_similarity'] = tfidf_similarity
             features.append(feature_dict)
             
         return pd.DataFrame(features)    
     
     def fit(self, X, y=None):
-        """Fit the feature extractor by preparing TF-IDF weights.
+        """
+        Fit the feature extractor by preparing TF-IDF weights.
         
         This method fits the TF-IDF vectorizer on all claims and evidence texts
         to prepare for computing similarity features during transform.
@@ -134,7 +112,7 @@ class FeatureExtractor:
         Returns:
             self: Returns the instance itself.
         """
-        # Prepare for TF-IDF
+        # Extract all texts for TF-IDF fitting
         all_texts = []
         for text in X:
             claim, evidence = text.split("[SEP]")

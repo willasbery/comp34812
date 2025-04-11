@@ -1,0 +1,17 @@
+{
+    "weight_decay": 0.029106359131330698,
+    "warmup_ratio": 0.10986584841970365,
+    "eval_loss": 0.410632461309433,
+    "eval_Accuracy": 0.8933513331083361,
+    "eval_Positive_Precision": 0.7870159453302962,
+    "eval_Positive_Recall": 0.8426829268292683,
+    "eval_Positive_F1": 0.8138987043580683,
+    "eval_W Macro-P": 0.8963093438954471,
+    "eval_W Macro-R": 0.8933513331083361,
+    "eval_W Macro-F1": 0.894441269831968,
+    "eval_MCC": 0.7401289591158005,
+    "eval_runtime": 72.5296,
+    "eval_samples_per_second": 81.705,
+    "eval_steps_per_second": 10.217,
+    "epoch": 3
+  }

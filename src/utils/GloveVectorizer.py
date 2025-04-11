@@ -14,11 +14,14 @@ CACHE_DIR = config.DATA_DIR.parent / "cache"
 EMBEDDINGS_CACHE_PATH = CACHE_DIR / 'glove_embeddings.pkl'
 
 def load_cached_embeddings(embedding_dim=300):
-    """Load GloVe embeddings of specified dimension from cache if available, otherwise download and cache them.
+    """
+    Load GloVe embeddings of specified dimension from cache if available, otherwise download and cache them.
+    
     Args:
         embedding_dim (int): Desired dimension for GloVe embeddings (50, 100, 200, or 300). Defaults to 300.
+    
     Returns:
-        dict: GloVe embeddings.
+        dict: GloVe word embeddings dictionary.
     """
     
     # Create cache directory if it doesn't exist
@@ -42,34 +45,29 @@ def load_cached_embeddings(embedding_dim=300):
     return glove_embeddings
 
 class GloveVectorizer(BaseEstimator, TransformerMixin):
-    """A vectorizer that combines GloVe word embeddings with positional encoding.
+    """
+    A vectorizer that combines GloVe word embeddings with positional encoding.
     
     This vectorizer transforms text into fixed-size vectors by:
     1. Converting words to GloVe embeddings
     2. Applying TF-IDF weighting (optional)
     3. Adding positional encoding information
     4. Computing interaction features between claim and evidence
-    
-    Attributes:
-        glove (dict): Pre-trained GloVe word embeddings
-        vector_size (int): Dimensionality of the word embeddings (default: 300)
-        sep_token (str): Token used to separate claim and evidence (default: '[SEP]')
-        use_tfidf_weighting (bool): Whether to use TF-IDF weights for word embeddings
-        tfidf_vectorizer (TfidfVectorizer): TF-IDF vectorizer for word weighting
     """
     
-    def __init__(self, sep_token: str = '[SEP]', use_tfidf_weighting=True, vocabulary=None, embedding_dim=300, ngram_range=(1,1), min_df=2, max_df=0.95):
-        """Initialize the GloveVectorizer.
+    def __init__(self, sep_token: str = '[SEP]', use_tfidf_weighting=True, vocabulary=None, 
+                 embedding_dim=300, ngram_range=(1,1), min_df=2, max_df=0.95):
+        """
+        Initialize the GloveVectorizer.
         
         Args:
-            sep_token (str, optional): Token used to separate claim and evidence. 
-                                     Defaults to '[SEP]'.
-            use_tfidf_weighting (bool, optional): Whether to use TF-IDF weights 
-                                                for word embeddings. Defaults to True.
-            vocabulary (set, optional): Set of words to include in the vocabulary.
-            embedding_dim (int, optional): Desired embedding dimension.
-            ngram_range (tuple, optional): The lower and upper boundary of the n-grams to be extracted.
-                                         All values of n such that min_n <= n <= max_n will be used. Defaults to (1,1).
+            sep_token: Token used to separate claim and evidence. Defaults to '[SEP]'.
+            use_tfidf_weighting: Whether to use TF-IDF weights for word embeddings. Defaults to True.
+            vocabulary: Set of words to include in the vocabulary.
+            embedding_dim: Desired embedding dimension.
+            ngram_range: The lower and upper boundary of the n-grams to be extracted.
+            min_df: Minimum document frequency for TF-IDF.
+            max_df: Maximum document frequency for TF-IDF.
         """
         self.glove = load_cached_embeddings(embedding_dim)
         self.vector_size = embedding_dim
@@ -77,6 +75,8 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         self.use_tfidf_weighting = use_tfidf_weighting
         self.vocabulary = vocabulary or set()
         self.ngram_range = ngram_range
+        
+        # Initialize TF-IDF vectorizer if weighting is enabled
         self.tfidf_vectorizer = TfidfVectorizer(
             min_df=min_df, 
             max_df=max_df,
@@ -87,13 +87,14 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         
     @staticmethod
     def _pre_process(doc: str) -> str:
-        """Pre-process text by removing unrepresentable characters and quotes.
+        """
+        Pre-process text by removing unrepresentable characters and quotes.
         
         Args:
-            doc (str): Input text document
+            doc: Input text document
             
         Returns:
-            str: Pre-processed text with ASCII-only characters and no leading/trailing quotes
+            Pre-processed text with ASCII-only characters and no leading/trailing quotes
         """
         # Remove any unrepresentable characters
         doc = doc.encode('ascii', 'ignore').decode('ascii')
@@ -102,7 +103,16 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         return doc
     
     def _get_weighted_vector(self, text: str, tfidf_weights=None) -> np.ndarray:
-        """Compute weighted average using only vocabulary words"""
+        """
+        Compute weighted average of word vectors using vocabulary words.
+        
+        Args:
+            text: Input text
+            tfidf_weights: Dictionary mapping words to their TF-IDF weights
+            
+        Returns:
+            Weighted average vector of the input text's words
+        """
         # Replace OOV words with UNK before processing
         words = [word if word in self.vocabulary else '<UNK>' for word in text.split()]
         
@@ -132,21 +142,18 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         return np.zeros(self.vector_size)
     
     def _get_positional_encoding(self, max_len: int, d_model: int) -> np.ndarray:
-        """Generate sinusoidal positional encoding matrix.
+        """
+        Generate sinusoidal positional encoding matrix.
         
         Implements the positional encoding from "Attention Is All You Need" (Vaswani et al., 2017).
-        The encoding allows the model to learn to attend by relative positions, as any fixed offset k,
-        PE(pos+k) can be represented as a linear function of PE(pos).
+        The encoding allows the model to learn to attend by relative positions.
         
         Args:
-            max_len (int): Maximum sequence length to encode
-            d_model (int): Dimensionality of the model/embeddings
+            max_len: Maximum sequence length to encode
+            d_model: Dimensionality of the model/embeddings
             
         Returns:
-            np.ndarray: A matrix of shape (max_len, d_model) with positional encodings.
-                       Even indices use sine, odd indices use cosine.
-                       PE(pos, 2i) = sin(pos/10000^(2i/d_model))
-                       PE(pos, 2i+1) = cos(pos/10000^(2i/d_model))
+            A matrix of shape (max_len, d_model) with positional encodings.
         """
         # Pre-compute position and dimension arrays
         positions = np.arange(max_len)[:, np.newaxis]  # Shape: (max_len, 1)
@@ -165,18 +172,17 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         return pe
 
     def _extract_positional_features(self, text: str) -> np.ndarray:
-        """Extract features using sinusoidal positional encoding.
+        """
+        Extract features using sinusoidal positional encoding.
         
         Applies positional encoding to word vectors to capture sequential information
-        in the input text. This allows the model to understand the position of
-        words in the sequence, similar to how transformers encode position.
+        in the input text.
         
         Args:
-            text (str): Input text string
+            text: Input text string
             
         Returns:
-            np.ndarray: A vector of size self.vector_size with positionally encoded features.
-                       If no words are found in GloVe, returns zero vector.
+            A vector of size self.vector_size with positionally encoded features
         """
         words = text.split()
         if not words:
@@ -205,12 +211,13 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         return np.mean(positionally_encoded, axis=0)
     
     def fit(self, X, y=None):
-        """Fit the vectorizer by preparing TF-IDF weights if enabled.
+        """
+        Fit the vectorizer by preparing TF-IDF weights if enabled.
         
         Args:
-            X (array-like): Training data. Each element should be a string containing
-                          claim and evidence separated by self.sep_token.
-            y (array-like, optional): Target values. Not used in this vectorizer.
+            X: Training data. Each element should be a string containing
+               claim and evidence separated by self.sep_token.
+            y: Target values. Not used in this vectorizer.
             
         Returns:
             self: Returns the instance itself.
@@ -221,7 +228,8 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         return self
     
     def transform(self, X):
-        """Transform the input data into feature vectors.
+        """
+        Transform the input data into feature vectors.
         
         For each input text, this method:
         1. Splits the text into claim and evidence
@@ -230,14 +238,11 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
         4. Computes interaction features between claim and evidence
         
         Args:
-            X (array-like): Input data. Each element should be a string containing
-                          claim and evidence separated by self.sep_token.
+            X: Input data. Each element should be a string containing
+               claim and evidence separated by self.sep_token.
             
         Returns:
-            np.ndarray: Feature matrix of shape (n_samples, n_features) where:
-                       - n_features = 4 * vector_size (claim vector, evidence vector,
-                         claim positional features, evidence positional features) +
-                         2 * vector_size (interaction features)
+            Feature matrix with claim, evidence, positional, and interaction features
         """
         doc_vectors = []
         
@@ -270,15 +275,18 @@ class GloveVectorizer(BaseEstimator, TransformerMixin):
             claim_pos_features = self._extract_positional_features(claim)
             evidence_pos_features = self._extract_positional_features(evidence)
             
+            # Prepare interaction features
+            element_wise_product = claim_vector * evidence_vector
+            absolute_difference = np.abs(claim_vector - evidence_vector)
+            
             # Concatenate all features
             doc_vectors.append(np.concatenate([
                 claim_vector, 
                 evidence_vector,
                 claim_pos_features,
                 evidence_pos_features,
-                # Add interaction features
-                claim_vector * evidence_vector,  # Element-wise product
-                np.abs(claim_vector - evidence_vector)  # Absolute difference
+                element_wise_product,
+                absolute_difference
             ]))
             
         return np.array(doc_vectors)
